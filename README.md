@@ -29,7 +29,7 @@
 - [Quick start](#quick-start)
 - [Roadmap](#roadmap)
 - [Security and data notice](#security-and-data-notice)
-- [Disclosure](#disclosure) · [License](#license)
+- [Contributing](#contributing) · [Disclosure](#disclosure) · [License](#license)
 
 ---
 
@@ -231,6 +231,11 @@ The day-by-day plan is in [`docs/03-build-plan.md`](docs/03-build-plan.md).
 - NECROMANCER **never connects to or pushes configuration to any device**. It produces a candidate config and evidence
   for human review.
 - Vendor names are used only to describe compatibility. This project isn't affiliated with or endorsed by any vendor.
+
+## Contributing
+Wrong migration decisions are the most valuable reports. See [CONTRIBUTING.md](CONTRIBUTING.md) for the ground rules
+(synthetic data only, spec-first, nothing silent) and use the **Migration semantics** issue form. Report vulnerabilities
+privately via [security advisories](https://github.com/natrajexplore/necromancer/security/advisories/new).
 
 ## Disclosure
 Planning documents and the initial spec drafts were prepared with Claude before implementation began, and the CI

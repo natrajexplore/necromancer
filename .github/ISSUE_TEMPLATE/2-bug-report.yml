@@ -1,0 +1,70 @@
+name: Bug report
+description: A crash, error or broken feature (for a wrong migration decision, use "Migration semantics").
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Synthetic data only.** Never paste a real config, real IPs or secrets. For a security vulnerability, use
+        private vulnerability reporting instead of a public issue.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Parser / exhume
+        - Autopsy
+        - Resurrect (PAN-OS emitter)
+        - Proof of Life (oracle)
+        - Gates / verdict
+        - Grimoire report / runbook
+        - Web UI (graveyard)
+        - CLI (necro)
+        - HTTP API
+        - MCP server
+        - Kiro hooks / agents / steering
+        - CI / repo checks
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Include the full error message or traceback.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Commands, inputs (a bundled sample or a minimal synthetic config) and options such as profile and seed.
+      placeholder: |
+        1. cd backend && uv sync
+        2. uv run necro prove ../samples/dead-configs/pix-2006-hq.cfg --profile ci --seed 1234
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Output of `git rev-parse --short HEAD`, or the version on the hosted demo's /healthz.
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: Windows 11 / macOS 15 / Ubuntu 24.04, Python 3.12.x, Node 22.x, browser
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Data hygiene
+      options:
+        - label: Everything above is synthetic. It contains no real IPs, hostnames, company names or secrets.
+          required: true

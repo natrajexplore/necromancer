@@ -127,7 +127,7 @@ def check_synthetic_ips() -> None:
 
 # 6. Golden flows are well-formed and point at real configs ----------------------------------
 REQUIRED = ("id", "note", "context", "protocol", "src", "dst", "expect_action", "expect_rule")
-PSEUDO_RULES = {"implicit-deny", "implicit-permit-no-acl", "implicit-security-level"}
+PSEUDO_RULES = {"implicit-deny", "implicit-permit-no-acl", "implicit-security-level", "same-security-deny"}
 
 
 def check_golden_flows() -> None:

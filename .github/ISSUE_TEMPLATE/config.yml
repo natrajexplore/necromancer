@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/natrajexplore/necromancer/security/advisories/new
+    about: Unredacted secrets, parser hangs or crashes, or anything exploitable. Please don't open a public issue.
+  - name: Contributing guide
+    url: https://github.com/natrajexplore/necromancer/blob/main/CONTRIBUTING.md
+    about: Ground rules (synthetic data only, spec-first, nothing silent) and how to report a wrong decision.

@@ -1,0 +1,102 @@
+name: Migration semantics (wrong decision or translation)
+description: NECROMANCER decided, translated or proved something differently from how the source device behaves.
+title: "[semantics] "
+labels: ["semantics", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most valuable kind of report. **Use synthetic data only**: RFC 5737 (192.0.2.0/24, 198.51.100.0/24,
+        203.0.113.0/24), RFC 1918 or 2001:db8::/32 addresses, fake secrets, no real hostnames or company names.
+  - type: dropdown
+    id: source
+    attributes:
+      label: Source dialect and version
+      options:
+        - Cisco PIX 6.x
+        - Cisco ASA 7.x – 8.2
+        - Cisco ASA 8.3 – 9.x
+        - Cisco IOS 12.x
+        - Other (say which below)
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where it goes wrong
+      options:
+        - Exhume (parsing, coverage, unparsed lines)
+        - Source decision (evaluator)
+        - Autopsy finding
+        - Resurrect (emitted PAN-OS config)
+        - Proof of Life (oracle missed or invented a divergence)
+        - Gates / verdict
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Minimal synthetic config
+      description: The fewest lines that reproduce it (interfaces, ACL, access-group, NAT, routes).
+      render: text
+      placeholder: |
+        interface GigabitEthernet0/0
+         nameif outside
+         security-level 0
+         ip address 203.0.113.2 255.255.255.240
+        access-list OUTSIDE_IN extended permit tcp any4 host 10.60.0.10 eq https
+        access-group OUTSIDE_IN in interface outside
+    validations:
+      required: true
+  - type: textarea
+    id: flow
+    attributes:
+      label: The flow
+      description: Protocol, source IP and port, destination IP and port (or ICMP type), ingress interface.
+      placeholder: tcp 192.0.2.44:40000 -> 10.60.0.10:443, ingress outside
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour on the source device, with evidence
+      description: |
+        The decision (permit/deny), the matching rule and the egress zone. Cite vendor documentation (title, section,
+        OS version) or paste `packet-tracer` output from a lab device running the same synthetic config.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What NECROMANCER did
+      description: Its decision, rule and zone, or the PAN-OS rule it emitted. Include the command you ran and the tool version.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: golden
+    attributes:
+      label: Proposed golden flow (optional)
+      description: See samples/golden-flows/README.md for the fields.
+      render: toml
+      placeholder: |
+        [[flow]]
+        id = "A98-14"
+        note = "..."
+        context = "outside:in"
+        protocol = "tcp"
+        src = "192.0.2.44"
+        sport = 40000
+        dst = "10.60.0.10"
+        dport = 443
+        expect_action = "permit"
+        expect_rule = "OUTSIDE_IN#1"
+        expect_to_zone = "dmz"
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Data hygiene
+      options:
+        - label: Everything above is synthetic. It contains no real IPs, hostnames, company names or secrets.
+          required: true

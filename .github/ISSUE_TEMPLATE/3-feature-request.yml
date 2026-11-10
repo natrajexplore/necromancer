@@ -1,0 +1,59 @@
+name: Feature request
+description: A new dialect, check, gate, report section or workflow improvement.
+title: "[feature] "
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who needs this, and what goes wrong or takes too long today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+    validations:
+      required: true
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Migration phase it supports
+      description: Phases are defined in .kiro/steering/migration-governance.md.
+      multiple: true
+      options:
+        - P0 Scope & inventory
+        - P1 Baseline capture
+        - P2 Pre-migration hygiene (autopsy)
+        - P3 Translation (like-for-like)
+        - P4 Validation (gates, proof)
+        - P5 Peer review & CAB
+        - P6 Pre-cutover checks
+        - P7 Cutover
+        - P8 Post-checks & hypercare
+        - P9 Rollback
+        - P10 Optimization (tightening)
+        - P11 Decommission
+        - Not phase-specific
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance criteria (EARS)
+      description: One per line, so the request can go straight into a spec.
+      placeholder: |
+        WHEN the source config contains `object-group fqdn` THE SYSTEM SHALL classify the line as security-relevant unparsed with reason `fqdn-object`.
+        THE SYSTEM SHALL list each such line in the coverage section of the Grimoire.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Principles
+      options:
+        - label: This keeps "like-for-like first" and "nothing silent", and doesn't need the tool to connect to a device.
+          required: true
