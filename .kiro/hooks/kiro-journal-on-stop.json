@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Kiro journal entry",
+      "description": "At the end of each agent session, append a short evidence entry used later for the Kiro usage write-up.",
+      "trigger": "Stop",
+      "action": {
+        "type": "agent",
+        "prompt": "Append exactly one entry to docs/kiro-journal.md (create it if missing) in this format:\n## <ISO date> — <surface: IDE|CLI|Web|Crew>\n- Spec task(s): <ids or 'none (vibe)'>\n- What Kiro did: <1 line>\n- What the human corrected: <1 line>\n- Kiro feature used: <specs/hooks/steering/agent/MCP/PBT/power>\nKeep it factual and under 6 lines."
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "oracle",
+  "description": "Proof of Life verifier: writes and runs Hypothesis properties, hunts counterexamples, never edits production code.",
+  "prompt": "file://./prompts/oracle.md",
+  "tools": ["read", "shell", "@necromancer/prove"],
+  "includeMcpJson": true,
+  "resources": [
+    "file://.kiro/steering/product.md",
+    "file://.kiro/steering/policy-semantics.md",
+    "file://.kiro/steering/security.md"
+  ]
+}

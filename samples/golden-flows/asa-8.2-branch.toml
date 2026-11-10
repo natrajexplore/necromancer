@@ -1,0 +1,172 @@
+config = "dead-configs/asa-8.2-branch.cfg"
+dialect = "asa"
+address_space = "mapped"   # ASA <= 8.2: ACLs reference mapped (global) addresses of statics
+
+[[flow]]
+id = "A82-01"
+note = "Partner /25 to app tier inside APP_PORTS range"
+context = "outside:in"
+protocol = "tcp"
+src = "203.0.113.200"
+sport = 40000
+dst = "172.16.20.10"
+dport = 8085
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#1"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A82-02"
+note = "Just below the /25 (203.0.113.127): skips #1, caught by the neq 22 rule #6"
+context = "outside:in"
+protocol = "tcp"
+src = "203.0.113.127"
+sport = 40000
+dst = "172.16.20.10"
+dport = 8085
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#6"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A82-03"
+note = "Oracle DB listener on the real address (routed, no translation on this path)"
+context = "outside:in"
+protocol = "tcp"
+src = "203.0.113.50"
+sport = 40000
+dst = "172.16.30.5"
+dport = 1521
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#2"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A82-04"
+note = "Redundant rule #3 still matches first; removing it must not change the decision (#4 catches it)"
+context = "outside:in"
+protocol = "tcp"
+src = "203.0.113.50"
+sport = 40000
+dst = "172.16.20.7"
+dport = 8443
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#3"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A82-05"
+note = "8443 to the DB host via nested ALL_SERVERS"
+context = "outside:in"
+protocol = "tcp"
+src = "203.0.113.50"
+sport = 40000
+dst = "172.16.30.5"
+dport = 8443
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#4"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A82-06"
+note = "SNMP (udp 161) via a tcp-udp service group used in a udp ACE"
+context = "outside:in"
+protocol = "udp"
+src = "198.51.100.77"
+sport = 50000
+dst = "172.16.30.5"
+dport = 161
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#5"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A82-07"
+note = "snmptrap (162) is not in MGMT_PORTS"
+context = "outside:in"
+protocol = "udp"
+src = "198.51.100.77"
+sport = 50000
+dst = "172.16.30.5"
+dport = 162
+expect_action = "deny"
+expect_rule = "OUTSIDE_IN#9"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A82-08"
+note = "neq 22: port 22 itself is excluded"
+context = "outside:in"
+protocol = "tcp"
+src = "192.0.2.10"
+sport = 40000
+dst = "172.16.20.10"
+dport = 22
+expect_action = "deny"
+expect_rule = "OUTSIDE_IN#9"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A82-09"
+note = "neq 22: port 21 is included"
+context = "outside:in"
+protocol = "tcp"
+src = "192.0.2.10"
+sport = 40000
+dst = "172.16.20.10"
+dport = 21
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#6"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A82-10"
+note = "Pre-8.3 static: the ACE references the mapped address; PAN-OS matches the same pre-NAT address, zone comes from the real address"
+context = "outside:in"
+protocol = "tcp"
+src = "203.0.113.200"
+sport = 40000
+dst = "198.51.100.5"
+dport = 1433
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#7"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A82-11"
+note = "RDP rule #8 is inactive and must be skipped"
+context = "outside:in"
+protocol = "tcp"
+src = "192.0.2.10"
+sport = 40000
+dst = "172.16.30.5"
+dport = 3389
+expect_action = "deny"
+expect_rule = "OUTSIDE_IN#9"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A82-12"
+note = "Inside DNS out to the internet"
+context = "inside:in"
+protocol = "udp"
+src = "172.16.10.20"
+sport = 50000
+dst = "192.0.2.53"
+dport = 53
+expect_action = "permit"
+expect_rule = "INSIDE_OUT#3"
+expect_to_zone = "outside"
+
+[[flow]]
+id = "A82-13"
+note = "Anything else outbound hits the overly broad permit ip any any"
+context = "inside:in"
+protocol = "tcp"
+src = "172.16.10.20"
+sport = 50000
+dst = "192.0.2.1"
+dport = 3389
+expect_action = "permit"
+expect_rule = "INSIDE_OUT#4"
+expect_to_zone = "outside"

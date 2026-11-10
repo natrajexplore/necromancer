@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Seeded-ghost recall check",
+      "description": "When a sample dead config is edited, remind the agent to keep the GHOST annotations and the autopsy recall test in sync.",
+      "trigger": "PostFileSave",
+      "matcher": "samples/(dead-configs|broken-configs|golden-flows)/.*\\.(cfg|toml)$",
+      "action": {
+        "type": "agent",
+        "prompt": "A sample config was edited. 1) Verify every intentionally haunted rule carries a '! GHOST: <type>' comment on the line directly above it, and every deliberately unsupported line carries '! UNSUPPORTED:' or '! EXPECT-UNPARSED:'. 2) Verify only RFC 5737/RFC 1918 addresses and no real names or secrets are present. 3) If ACE order or content changed, re-check by hand every vector in samples/golden-flows/<same-name>.toml (rule ids are <acl>#<ordinal>) and update expectations only with a note citing .kiro/steering/policy-semantics.md. Never regenerate golden flows from evaluate.py output. 4) Run `cd backend && uv run pytest -q tests/test_autopsy_recall.py tests/test_golden_flows.py`."
+      }
+    }
+  ]
+}

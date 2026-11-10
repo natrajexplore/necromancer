@@ -1,0 +1,12 @@
+{
+  "name": "autopsy-surgeon",
+  "description": "Finds ghost rules (shadowed, redundant, overly broad, insecure, unused) and writes plain-English findings.",
+  "prompt": "file://./prompts/autopsy-surgeon.md",
+  "tools": ["read", "write", "shell", "@necromancer/exhume", "@necromancer/autopsy"],
+  "includeMcpJson": true,
+  "resources": [
+    "file://.kiro/steering/product.md",
+    "file://.kiro/steering/policy-semantics.md",
+    "file://.kiro/steering/security.md"
+  ]
+}

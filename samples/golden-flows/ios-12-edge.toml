@@ -1,0 +1,173 @@
+config = "dead-configs/ios-12-edge.cfg"
+dialect = "ios"
+address_space = "as-is"   # no NAT in this config
+
+[[flow]]
+id = "IOS-01"
+note = "Return traffic with ACK set matches the established rule; PAN-OS handles it with session state instead"
+context = "FastEthernet0/0:in"
+protocol = "tcp"
+src = "198.51.100.5"
+sport = 443
+dst = "10.20.3.4"
+dport = 51000
+established = true
+expect_action = "permit"
+expect_rule = "110#1"
+expect_to_zone = "LAN"
+expect_ledger = "stateful-established"
+
+[[flow]]
+id = "IOS-02"
+note = "Same 5-tuple without ACK/RST (a new connection attempt) is denied"
+context = "FastEthernet0/0:in"
+protocol = "tcp"
+src = "198.51.100.5"
+sport = 443
+dst = "10.20.3.4"
+dport = 51000
+established = false
+expect_action = "deny"
+expect_rule = "110#7"
+expect_to_zone = "LAN"
+
+[[flow]]
+id = "IOS-03"
+note = "Published HTTPS server"
+context = "FastEthernet0/0:in"
+protocol = "tcp"
+src = "198.51.100.5"
+sport = 40000
+dst = "10.20.1.10"
+dport = 443
+expect_action = "permit"
+expect_rule = "110#2"
+expect_to_zone = "LAN"
+
+[[flow]]
+id = "IOS-04"
+note = "Telnet to the router's own LAN address is to-the-box traffic (PAN-OS: interface management profile)"
+context = "FastEthernet0/0:in"
+protocol = "tcp"
+src = "198.51.100.5"
+sport = 40000
+dst = "10.20.0.1"
+dport = 23
+expect_action = "permit"
+expect_rule = "110#4"
+expect_to_zone = "self"
+expect_ledger = "to-the-box"
+
+[[flow]]
+id = "IOS-05"
+note = "ICMP echo-reply (type 0) permitted"
+context = "FastEthernet0/0:in"
+protocol = "icmp"
+src = "192.0.2.1"
+dst = "10.20.3.4"
+icmp_type = 0
+expect_action = "permit"
+expect_rule = "110#5"
+expect_to_zone = "LAN"
+
+[[flow]]
+id = "IOS-06"
+note = "ICMP echo request (type 8) denied; catches an emitter that widens echo-reply to the ping App-ID"
+context = "FastEthernet0/0:in"
+protocol = "icmp"
+src = "192.0.2.1"
+dst = "10.20.3.4"
+icmp_type = 8
+expect_action = "deny"
+expect_rule = "110#7"
+expect_to_zone = "LAN"
+
+[[flow]]
+id = "IOS-07"
+note = "ICMP time-exceeded (type 11) permitted"
+context = "FastEthernet0/0:in"
+protocol = "icmp"
+src = "192.0.2.1"
+dst = "10.20.3.4"
+icmp_type = 11
+expect_action = "permit"
+expect_rule = "110#6"
+expect_to_zone = "LAN"
+
+[[flow]]
+id = "IOS-08"
+note = "LAN HTTPS out; the /24 rule #4 is shadowed by #2"
+context = "FastEthernet0/1:in"
+protocol = "tcp"
+src = "10.20.5.9"
+sport = 50000
+dst = "203.0.113.80"
+dport = 443
+expect_action = "permit"
+expect_rule = "LAN_OUT#2"
+expect_to_zone = "WAN"
+
+[[flow]]
+id = "IOS-09"
+note = "Range upper boundary 6010 is inclusive"
+context = "FastEthernet0/1:in"
+protocol = "tcp"
+src = "10.20.5.9"
+sport = 50000
+dst = "203.0.113.80"
+dport = 6010
+expect_action = "permit"
+expect_rule = "LAN_OUT#5"
+expect_to_zone = "WAN"
+
+[[flow]]
+id = "IOS-10"
+note = "Range upper boundary + 1"
+context = "FastEthernet0/1:in"
+protocol = "tcp"
+src = "10.20.5.9"
+sport = 50000
+dst = "203.0.113.80"
+dport = 6011
+expect_action = "deny"
+expect_rule = "LAN_OUT#6"
+expect_to_zone = "WAN"
+
+[[flow]]
+id = "IOS-11"
+note = "Range lower boundary - 1"
+context = "FastEthernet0/1:in"
+protocol = "tcp"
+src = "10.20.5.9"
+sport = 50000
+dst = "203.0.113.80"
+dport = 5999
+expect_action = "deny"
+expect_rule = "LAN_OUT#6"
+expect_to_zone = "WAN"
+
+[[flow]]
+id = "IOS-12"
+note = "DNS over TCP is not permitted (only udp 53)"
+context = "FastEthernet0/1:in"
+protocol = "tcp"
+src = "10.20.1.1"
+sport = 50000
+dst = "203.0.113.53"
+dport = 53
+expect_action = "deny"
+expect_rule = "LAN_OUT#6"
+expect_to_zone = "WAN"
+
+[[flow]]
+id = "IOS-13"
+note = "MGMT interface has no ACL: IOS permits everything (routers have no security levels)"
+context = "FastEthernet0/2:in"
+protocol = "tcp"
+src = "10.99.0.50"
+sport = 50000
+dst = "10.20.1.10"
+dport = 3389
+expect_action = "permit"
+expect_rule = "implicit-permit-no-acl"
+expect_to_zone = "LAN"

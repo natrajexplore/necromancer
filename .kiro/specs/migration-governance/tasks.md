@@ -1,0 +1,22 @@
+# Implementation Plan: migration-governance
+
+- [ ] 1. Models: `Waiver`, `ChangeMeta`, `Sidecar` (JSON + TOML loaders), `Check`, `GateResult`, `Verdict`, `AuditHeader`
+  - _Requirements: 2.2, 2.3, 3.1, 6.2_
+- [ ] 2. `validate_panos.py` static checks (gate G3) with error/warning split
+  - _Requirements: 1.4_
+- [ ] 3. Gates G1, G2, G5, G6 over policy, coverage, ledger and findings
+  - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7_
+- [ ] 4. Gate G4 over ProofResult + golden-flow results, including the budget check and the unhit-rule warnings
+  - _Requirements: 1.5_
+- [ ] 5. Verdict computation, waiver expiry, four-eyes rule, forbidden-words test
+  - _Requirements: 2.1, 2.2, 2.3, 2.4_
+- [ ] 6. Audit header + determinism test (PBT P11 on the report body)
+  - _Requirements: 3.1, 3.2, 3.3_
+- [ ] 7. Grimoire Markdown + HTML: all sections in order, zone mapping, zone-to-zone matrix, rule inventory with justification, control mapping, secret-rotation advice
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
+- [ ] 8. Runbook: pre-checks, PAN-OS `test security-policy-match` list, ASA `packet-tracer` list, rollback, hypercare; snapshot tests per sample
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
+- [ ] 9. Wire into API (`/v1/gate`, `/v1/grimoire`), CLI (`necro gate`, exit codes) and the MCP `gate` tool
+  - _Requirements: 6.1, 6.2_
+- [ ] 10. **[P2]** PDF export of the report; CSV export of findings and ledger
+  - _Requirements: 4.7_

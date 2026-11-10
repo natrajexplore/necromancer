@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Readiness gate guard",
+      "description": "When gate, report, runbook or PAN-OS validation code changes, run the governance tests and remind the agent of the non-negotiable governance rules.",
+      "trigger": "PostFileSave",
+      "matcher": "backend/necro/(gates|report|runbook|validate_panos)",
+      "action": {
+        "type": "agent",
+        "prompt": "Governance code changed. 1) Run `cd backend && uv run pytest -q tests/test_gates.py tests/test_report.py tests/test_runbook.py`. 2) Confirm the rules in .kiro/steering/migration-governance.md still hold: no GO with unwaived security-relevant unparsed lines, no GO below the ci proof budget or with any golden-flow failure, pending ledger entries block GO, expired waivers count as missing, baseline and tightened outputs stay separate, and no output says 'compliant' or 'safe to deploy'. 3) Report any rule that is no longer enforced by a test."
+      }
+    }
+  ]
+}

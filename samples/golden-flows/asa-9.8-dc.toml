@@ -1,0 +1,176 @@
+config = "dead-configs/asa-9.8-dc.cfg"
+dialect = "asa"
+address_space = "real"   # ASA >= 8.3: ACLs reference real (untranslated) addresses
+
+[[flow]]
+id = "A98-01"
+note = "Internet HTTPS to the web server: the ACL uses the real IP; PAN-OS must match the pre-NAT public IP with to-zone dmz"
+context = "outside:in"
+protocol = "tcp"
+src = "192.0.2.44"
+sport = 40000
+dst = "10.60.0.10"
+dport = 443
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#1"
+expect_to_zone = "dmz"
+expect_panos_dst = "203.0.113.10"
+
+[[flow]]
+id = "A98-02"
+note = "HTTP via the inline service-object inside WEB-SVCS"
+context = "outside:in"
+protocol = "tcp"
+src = "192.0.2.44"
+sport = 40000
+dst = "10.60.0.20"
+dport = 80
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#1"
+expect_to_zone = "dmz"
+expect_panos_dst = "203.0.113.11"
+
+[[flow]]
+id = "A98-03"
+note = "App API under a time-range: the IR treats the rule as always active; PAN-OS gets a schedule object"
+context = "outside:in"
+protocol = "tcp"
+src = "192.0.2.44"
+sport = 40000
+dst = "10.60.0.20"
+dport = 9005
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#2"
+expect_to_zone = "dmz"
+expect_panos_dst = "203.0.113.11"
+expect_ledger = "time-range"
+
+[[flow]]
+id = "A98-04"
+note = "ICMP echo (type 8) via the icmp-type group"
+context = "outside:in"
+protocol = "icmp"
+src = "192.0.2.44"
+dst = "10.60.0.10"
+icmp_type = 8
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#3"
+expect_to_zone = "dmz"
+expect_panos_dst = "203.0.113.10"
+
+[[flow]]
+id = "A98-05"
+note = "ICMP unreachable (type 3) is not in PING-TYPES"
+context = "outside:in"
+protocol = "icmp"
+src = "192.0.2.44"
+dst = "10.60.0.10"
+icmp_type = 3
+expect_action = "deny"
+expect_rule = "OUTSIDE_IN#7"
+expect_to_zone = "dmz"
+expect_panos_dst = "203.0.113.10"
+
+[[flow]]
+id = "A98-06"
+note = "FTP to the web server (insecure-service ghost)"
+context = "outside:in"
+protocol = "tcp"
+src = "192.0.2.44"
+sport = 40000
+dst = "10.60.0.10"
+dport = 21
+expect_action = "permit"
+expect_rule = "OUTSIDE_IN#4"
+expect_to_zone = "dmz"
+expect_panos_dst = "203.0.113.10"
+
+[[flow]]
+id = "A98-07"
+note = "SSH to the web server falls to the explicit deny (#6 is the IPv6 ACE, still counted in seq)"
+context = "outside:in"
+protocol = "tcp"
+src = "192.0.2.44"
+sport = 40000
+dst = "10.60.0.10"
+dport = 22
+expect_action = "deny"
+expect_rule = "OUTSIDE_IN#7"
+expect_to_zone = "dmz"
+expect_panos_dst = "203.0.113.10"
+
+[[flow]]
+id = "A98-08"
+note = "Partner to app (security level 50 to 50, allowed by same-security-traffic inter-interface); no NAT on this path"
+context = "partner:in"
+protocol = "tcp"
+src = "198.51.100.20"
+sport = 40000
+dst = "10.60.0.20"
+dport = 9001
+expect_action = "permit"
+expect_rule = "PARTNER_IN#1"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "A98-09"
+note = "OSPF (IP protocol 89) from the partner via the protocol group"
+context = "partner:in"
+protocol = 89
+src = "198.51.100.20"
+dst = "10.50.0.5"
+expect_action = "permit"
+expect_rule = "PARTNER_IN#2"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A98-10"
+note = "RDP to inside matches permit ip any4 any4 first (proves PARTNER_IN#4 is shadowed)"
+context = "partner:in"
+protocol = "tcp"
+src = "198.51.100.20"
+sport = 40000
+dst = "10.50.0.5"
+dport = 3389
+expect_action = "permit"
+expect_rule = "PARTNER_IN#3"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A98-11"
+note = "Inside has no interface ACL: only the global ACL applies"
+context = "inside:in"
+protocol = "udp"
+src = "10.50.0.20"
+sport = 50000
+dst = "192.0.2.53"
+dport = 53
+expect_action = "permit"
+expect_rule = "GLOBAL_POLICY#1"
+expect_to_zone = "outside"
+
+[[flow]]
+id = "A98-12"
+note = "The global ACL's implicit deny replaces the security-level implicit permit"
+context = "inside:in"
+protocol = "tcp"
+src = "10.50.0.20"
+sport = 50000
+dst = "192.0.2.80"
+dport = 22
+expect_action = "deny"
+expect_rule = "implicit-deny"
+expect_to_zone = "outside"
+
+[[flow]]
+id = "A98-13"
+note = "DMZ (50) to outside (0) would be allowed by security level, but the global ACL now governs and does not match"
+context = "dmz:in"
+protocol = "tcp"
+src = "10.60.0.10"
+sport = 50000
+dst = "192.0.2.80"
+dport = 443
+expect_action = "deny"
+expect_rule = "implicit-deny"
+expect_to_zone = "outside"

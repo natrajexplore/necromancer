@@ -1,0 +1,12 @@
+{
+  "name": "ghoul-parser",
+  "description": "Parser specialist: turns dead PIX/ASA/IOS configs into exact IR. Owns backend/necro/parsers and their tests.",
+  "prompt": "file://./prompts/ghoul-parser.md",
+  "tools": ["read", "write", "shell", "@necromancer/exhume"],
+  "includeMcpJson": true,
+  "resources": [
+    "file://.kiro/steering/product.md",
+    "file://.kiro/steering/policy-semantics.md",
+    "file://.kiro/steering/security.md"
+  ]
+}

@@ -1,0 +1,21 @@
+# Implementation Plan: graveyard-ui
+
+- [ ] 1. Vite + React + TS + Tailwind scaffold, design tokens, self-hosted fonts, reduced-motion utility
+  - _Requirements: 6.1_
+- [ ] 2. API client (React Query) for exhume/autopsy/resurrect/prove/grimoire
+  - _Requirements: 1.2_
+- [ ] 3. Graveyard screen: SVG tombstones, sample list, drop/paste zone, privacy note, coverage + unquiet lines
+  - _Requirements: 1.1, 1.2, 1.3, 1.4_
+- [ ] 4. Autopsy screen: virtualized RuleTable, GhostBadge, filters, shadow-link highlight, zone mapping panel
+  - _Requirements: 2.1, 2.2, 2.3, 2.4_
+- [ ] 5. Resurrection screen: rise animation, SplitConfig, tightening panel, live ledger
+  - _Requirements: 3.1, 3.2_
+- [ ] 6. Proof of Life screen: Heartbeat, stats, CounterexampleCard, "Haunt it" toggle
+  - Per-context results and golden-flow count
+  - _Requirements: 4.1, 4.2, 4.3, 4.4_
+- [ ] 7. Verdict + Grimoire screen: themeless verdict and gate table first, report preview, runbook with copy buttons, MD/PDF/baseline/tightened downloads
+  - _Requirements: 5.1, 5.2, 5.3_
+- [ ] 8. Accessibility pass (axe), keyboard navigation, Lighthouse ≥ 85
+  - _Requirements: 6.1, 6.2_
+- [ ] 9. Playwright smoke tests: full ritual + haunted path
+  - _Requirements: 4.2_

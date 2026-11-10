@@ -1,0 +1,209 @@
+config = "dead-configs/pix-2006-hq.cfg"
+dialect = "pix"
+address_space = "mapped"   # PIX 6.x: ACLs reference mapped addresses; identity statics make mapped == real here
+
+[[flow]]
+id = "PIX-01"
+note = "HTTP to web via DMZ_PUBLIC/WEB_PORTS"
+context = "outside:in"
+protocol = "tcp"
+src = "203.0.113.7"
+sport = 40000
+dst = "192.168.50.10"
+dport = 80
+expect_action = "permit"
+expect_rule = "outside_in#1"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-02"
+note = "HTTPS to mail via the same group rule"
+context = "outside:in"
+protocol = "tcp"
+src = "198.51.100.20"
+sport = 40000
+dst = "192.168.50.11"
+dport = 443
+expect_action = "permit"
+expect_rule = "outside_in#1"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-03"
+note = "SMTP to mail"
+context = "outside:in"
+protocol = "tcp"
+src = "198.51.100.20"
+sport = 40001
+dst = "192.168.50.11"
+dport = 25
+expect_action = "permit"
+expect_rule = "outside_in#2"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-04"
+note = "SMTP to the DNS server is not permitted"
+context = "outside:in"
+protocol = "tcp"
+src = "198.51.100.20"
+sport = 40002
+dst = "192.168.50.12"
+dport = 25
+expect_action = "deny"
+expect_rule = "outside_in#7"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-05"
+note = "DNS query to dns-srv"
+context = "outside:in"
+protocol = "udp"
+src = "192.0.2.33"
+sport = 5353
+dst = "192.168.50.12"
+dport = 53
+expect_action = "permit"
+expect_rule = "outside_in#3"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-06"
+note = "Telnet from 203.0.113.0/24, lower boundary (network address)"
+context = "outside:in"
+protocol = "tcp"
+src = "203.0.113.0"
+sport = 1024
+dst = "192.168.50.10"
+dport = 23
+expect_action = "permit"
+expect_rule = "outside_in#5"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-07"
+note = "Telnet from 203.0.113.0/24, upper boundary (broadcast address)"
+context = "outside:in"
+protocol = "tcp"
+src = "203.0.113.255"
+sport = 1024
+dst = "192.168.50.10"
+dport = 23
+expect_action = "permit"
+expect_rule = "outside_in#5"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-08"
+note = "Telnet from outside the permitted /24"
+context = "outside:in"
+protocol = "tcp"
+src = "198.51.100.9"
+sport = 1024
+dst = "192.168.50.10"
+dport = 23
+expect_action = "deny"
+expect_rule = "outside_in#7"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-09"
+note = "Port boundary below www"
+context = "outside:in"
+protocol = "tcp"
+src = "203.0.113.7"
+sport = 40000
+dst = "192.168.50.10"
+dport = 79
+expect_action = "deny"
+expect_rule = "outside_in#7"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-10"
+note = "Port boundary above www"
+context = "outside:in"
+protocol = "tcp"
+src = "203.0.113.7"
+sport = 40000
+dst = "192.168.50.10"
+dport = 81
+expect_action = "deny"
+expect_rule = "outside_in#7"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-11"
+note = "ICMP echo-reply permitted (type 0)"
+context = "outside:in"
+protocol = "icmp"
+src = "192.0.2.1"
+dst = "192.168.50.10"
+icmp_type = 0
+expect_action = "permit"
+expect_rule = "outside_in#6"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-12"
+note = "ICMP echo request denied (type 8); catches an emitter that widens echo-reply to the ping App-ID"
+context = "outside:in"
+protocol = "icmp"
+src = "192.0.2.1"
+dst = "192.168.50.10"
+icmp_type = 8
+expect_action = "deny"
+expect_rule = "outside_in#7"
+expect_to_zone = "dmz"
+
+[[flow]]
+id = "PIX-13"
+note = "DMZ DNS server resolving outbound"
+context = "dmz:in"
+protocol = "udp"
+src = "192.168.50.12"
+sport = 5353
+dst = "198.51.100.53"
+dport = 53
+expect_action = "permit"
+expect_rule = "dmz_in#1"
+expect_to_zone = "outside"
+
+[[flow]]
+id = "PIX-14"
+note = "SSH from DMZ to mgmt-net hits permit ip any any first (proves dmz_in#4 is shadowed)"
+context = "dmz:in"
+protocol = "tcp"
+src = "192.168.50.20"
+sport = 50000
+dst = "10.10.10.5"
+dport = 22
+expect_action = "permit"
+expect_rule = "dmz_in#3"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "PIX-15"
+note = "Inside has no ACL: higher (100) to lower (0) security level is permitted"
+context = "inside:in"
+protocol = "tcp"
+src = "10.10.20.5"
+sport = 50000
+dst = "198.51.100.200"
+dport = 443
+expect_action = "permit"
+expect_rule = "implicit-security-level"
+expect_to_zone = "outside"
+
+[[flow]]
+id = "PIX-16"
+note = "Inside has no ACL: higher (100) to lower (50) security level is permitted"
+context = "inside:in"
+protocol = "udp"
+src = "10.10.20.5"
+sport = 50001
+dst = "192.168.50.12"
+dport = 53
+expect_action = "permit"
+expect_rule = "implicit-security-level"
+expect_to_zone = "dmz"

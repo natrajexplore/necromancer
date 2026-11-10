@@ -1,0 +1,12 @@
+{
+  "name": "necromancer",
+  "description": "Resurrection specialist: PAN-OS emitter, panos reader, zero-trust tightening and the exorcism ledger.",
+  "prompt": "file://./prompts/necromancer.md",
+  "tools": ["read", "write", "shell", "@necromancer"],
+  "includeMcpJson": true,
+  "resources": [
+    "file://.kiro/steering/product.md",
+    "file://.kiro/steering/policy-semantics.md",
+    "file://.kiro/steering/security.md"
+  ]
+}

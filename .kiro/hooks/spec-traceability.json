@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Spec traceability check",
+      "description": "When a spec's requirements change, ask the agent to re-check that design and tasks still trace to every acceptance criterion.",
+      "trigger": "PostFileSave",
+      "matcher": "\\.kiro/specs/.*/requirements\\.md$",
+      "action": {
+        "type": "agent",
+        "prompt": "requirements.md changed. List any acceptance criteria not referenced by a task in the same spec's tasks.md, and any task referencing a criterion that no longer exists. Propose the minimal edits to design.md and tasks.md; do not change code."
+      }
+    }
+  ]
+}

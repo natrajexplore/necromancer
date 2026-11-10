@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Proof of Life on save",
+      "description": "When parser, evaluator, emitter, NAT, zone or oracle code changes, run the fast property-based suite (dev profile is the conftest default) so semantic drift is caught on save.",
+      "trigger": "PostFileSave",
+      "matcher": "backend/necro/(parsers|emitters|evaluate|oracle|ir|sets|masks|names|zones|nat|tighten)",
+      "action": {
+        "type": "command",
+        "command": "cd backend && uv run pytest -q -m pbt -x --no-header -p no:cacheprovider"
+      },
+      "timeout": 120
+    }
+  ]
+}
