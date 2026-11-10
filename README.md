@@ -234,7 +234,8 @@ The day-by-day plan is in [`docs/03-build-plan.md`](docs/03-build-plan.md).
 
 ## Contributing
 Wrong migration decisions are the most valuable reports. See [CONTRIBUTING.md](CONTRIBUTING.md) for the ground rules
-(synthetic data only, spec-first, nothing silent) and use the **Migration semantics** issue form. Report vulnerabilities
+(synthetic data only, spec-first, nothing silent) and use the **Migration semantics** issue form. Everyone taking part
+follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities
 privately via [security advisories](https://github.com/natrajexplore/necromancer/security/advisories/new).
 
 ## Disclosure

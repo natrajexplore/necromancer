@@ -4,6 +4,8 @@ Thanks for helping raise dead firewalls. NECROMANCER produces evidence that peop
 changes, so the bar is **correctness first, then everything else**. This guide explains how work flows through the repo
 and what every change must respect.
 
+Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Contents
 - [Ground rules](#ground-rules)
 - [Ways to contribute](#ways-to-contribute)
