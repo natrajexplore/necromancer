@@ -46,6 +46,7 @@ inclusion: always
 /crew/                    Kiro Crew Seance workflow notes + artifacts
 /docs/                    Rules analysis, plan, write-up, video script, Devpost draft
 /.github/workflows/       CI (lint, types, tests, PBT ci profile, audit)
+/.github/scripts/         check_repo.py: repo-integrity checks (specs, hooks, samples, golden flows)
 ```
 
 ## Rules

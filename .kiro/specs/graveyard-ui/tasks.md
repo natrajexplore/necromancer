@@ -15,7 +15,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
 - [ ] 7. Verdict + Grimoire screen: themeless verdict and gate table first, report preview, runbook with copy buttons, MD/PDF/baseline/tightened downloads
   - _Requirements: 5.1, 5.2, 5.3_
-- [ ] 8. Accessibility pass (axe), keyboard navigation, Lighthouse ≥ 85
-  - _Requirements: 6.1, 6.2_
+- [ ] 8. Accessibility pass (axe), keyboard navigation, Lighthouse ≥ 85; asset review: no vendor logos or trademarked imagery
+  - _Requirements: 6.1, 6.2, 6.3_
 - [ ] 9. Playwright smoke tests: full ritual + haunted path
   - _Requirements: 4.2_

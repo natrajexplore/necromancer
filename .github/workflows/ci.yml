@@ -1,0 +1,105 @@
+name: CI
+
+# Lint, types, tests, property-based proof (ci profile), golden flows and dependency audits,
+# as defined in .kiro/steering/tech.md. Backend and frontend steps activate automatically once
+# Kiro generates backend/pyproject.toml and frontend/package-lock.json.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repo-integrity:
+    name: Specs, hooks and samples
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check .kiro JSON, spec traceability, sample annotations, synthetic IPs, golden flows
+        run: python -I .github/scripts/check_repo.py
+
+  backend:
+    name: Backend (ruff, mypy, pytest, PBT, golden flows, pip-audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip notice
+        if: hashFiles('backend/pyproject.toml') == ''
+        working-directory: .
+        run: echo "::notice::backend/ not generated yet - backend checks skipped"
+      - uses: astral-sh/setup-uv@v6
+        if: hashFiles('backend/pyproject.toml') != ''
+        with:
+          enable-cache: true
+      - name: Install (locked)
+        if: hashFiles('backend/pyproject.toml') != ''
+        run: uv sync --locked
+      - name: Lint
+        if: hashFiles('backend/pyproject.toml') != ''
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Types
+        if: hashFiles('backend/pyproject.toml') != ''
+        run: uv run mypy --strict necro
+      - name: Tests with coverage (dev profile, >= 90% on necro/)
+        if: hashFiles('backend/pyproject.toml') != ''
+        env:
+          HYPOTHESIS_PROFILE: dev
+        run: uv run pytest -q --cov=necro --cov-report=term-missing --cov-fail-under=90
+      - name: Proof of Life (PBT, ci profile)
+        if: hashFiles('backend/pyproject.toml') != ''
+        env:
+          HYPOTHESIS_PROFILE: ci
+        run: uv run pytest -q -m pbt
+      - name: Golden flows
+        if: hashFiles('backend/tests/test_golden_flows.py') != ''
+        run: uv run pytest -q tests/test_golden_flows.py
+      - name: Dependency audit
+        if: hashFiles('backend/pyproject.toml') != ''
+        run: uv run pip-audit
+
+  frontend:
+    name: Frontend (build, test, npm audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip notice
+        if: hashFiles('frontend/package-lock.json') == ''
+        working-directory: .
+        run: echo "::notice::frontend/ not generated yet - frontend checks skipped"
+      - uses: actions/setup-node@v4
+        if: hashFiles('frontend/package-lock.json') != ''
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install, build, test
+        if: hashFiles('frontend/package-lock.json') != ''
+        run: |
+          npm ci
+          npm run build
+          npm test
+      - name: Dependency audit
+        if: hashFiles('frontend/package-lock.json') != ''
+        run: npm audit --audit-level=high

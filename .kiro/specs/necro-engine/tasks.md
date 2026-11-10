@@ -5,7 +5,7 @@
 - [ ] 1. Project skeleton
   - Create `backend/` with `uv`, `.python-version` (3.12), `pyproject.toml` (fastapi, pydantic, hypothesis, pytest, pytest-cov, ruff, mypy, mangum, mcp, pip-audit)
   - `tests/conftest.py`: pytest marker `pbt`, Hypothesis profiles dev/ci/demo selected by `HYPOTHESIS_PROFILE` (default dev), socket-blocking fixture
-  - `.github/workflows/ci.yml` per tech steering
+  - Commit `uv.lock`; confirm the existing `.github/workflows/ci.yml` backend job activates and passes (adjust only if a command differs from tech steering)
   - _Requirements: 6.2, 8.2, 8.3, 8.4_
 
 - [ ] 2. IR and normalized sets

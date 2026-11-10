@@ -31,6 +31,10 @@ inclusion: always
 On every push and PR: `ruff check`, `ruff format --check`, `mypy --strict necro`, `pytest` (dev profile) with coverage,
 `pytest -m pbt` with `HYPOTHESIS_PROFILE=ci`, golden flows, `pip-audit`, frontend `npm ci && npm run build && npm test`,
 `npm audit --audit-level=high`.
+The workflow already exists. Its `repo-integrity` job runs `.github/scripts/check_repo.py` (`.kiro` JSON validity, `.kiro`
+never git-ignored, spec traceability, sample annotations, synthetic IPs, golden-flow schema). Backend and frontend steps
+are gated on `backend/pyproject.toml` and `frontend/package-lock.json`, so they switch on as soon as those files exist.
+Keep the exact commands above when extending it; never weaken a gate (e.g. lowering `--cov-fail-under`) to make CI green.
 
 ## Commands
 - `uv run pytest -q`: all tests
