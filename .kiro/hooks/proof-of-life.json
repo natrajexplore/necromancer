@@ -8,7 +8,7 @@
       "matcher": "backend/necro/(parsers|emitters|evaluate|oracle|ir|sets|masks|names|zones|nat|tighten)",
       "action": {
         "type": "command",
-        "command": "cd backend && uv run pytest -q -m pbt -x --no-header -p no:cacheprovider"
+        "command": "cd backend && uv run python -m pytest -q -m pbt -x --no-header -p no:cacheprovider"
       },
       "timeout": 120
     }

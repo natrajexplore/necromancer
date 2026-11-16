@@ -37,11 +37,24 @@ are gated on `backend/pyproject.toml` and `frontend/package-lock.json`, so they 
 Keep the exact commands above when extending it; never weaken a gate (e.g. lowering `--cov-fail-under`) to make CI green.
 
 ## Commands
-- `uv run pytest -q`: all tests
-- `uv run pytest -q -m pbt`: property-based tests only
-- `uv run pytest -q tests/test_golden_flows.py`: hand-verified vectors
-- `uv run ruff check . && uv run mypy necro`
+- `uv run python -m pytest -q`: all tests
+- `uv run python -m pytest -q -m pbt`: property-based tests only
+- `uv run python -m pytest -q tests/test_golden_flows.py`: hand-verified vectors
+- `uv run python -m ruff check . && uv run python -m mypy necro`
 - `npm --prefix frontend run dev|build|test`
 
 ## Commit convention
 Conventional commits + trailer `kiro-task: <spec>/<task-id>` when the change came from a Kiro spec task.
+
+## Local development on Windows (Smart App Control)
+The developer machine runs Windows 11 with **Smart App Control on**. It blocks unsigned executables (os error 4551),
+including uv-managed Python builds and many console-script launchers (`pytest.exe`, `mypy.exe`, `necro.exe`).
+- Use the **python.org** (signed) Python 3.12 as the interpreter, with `UV_PYTHON_PREFERENCE=only-system`. Never rely on
+  `uv python install`.
+- Always invoke tools as modules: `uv run python -m pytest`, `python -m ruff`, `python -m mypy`, `python -m uvicorn`.
+  Hooks, docs and generated scripts must use this form.
+- The CLI must be runnable as `uv run python -m necro ...` (provide `necro/__main__.py`), in addition to the `necro`
+  console script.
+- Frontend: Node and Vite (esbuild, rollup) run fine. In PowerShell call `npm.cmd`/`npx.cmd`, or set
+  `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+- CI (Linux) is unaffected.

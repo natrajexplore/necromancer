@@ -16,7 +16,9 @@ minimum demo is batches 1–8.
 | Install Kiro | Download from https://kiro.dev, install, sign in |
 | Request credits | Kiroween credit form (see `docs/01-rules-analysis.md`), if not done yet |
 | Open the project | Kiro → Open Folder → `D:\Gen AI Program\necromancer_kiro` |
-| Python 3.12 | `uv python install 3.12` (uv is installed; your system Python is 3.15, the project pins 3.12) |
+| Python 3.12 (signed) | `winget install Python.Python.3.12`. **Don't** use `uv python install`: Smart App Control blocks uv-managed Python (os error 4551) |
+| Tell uv to use it | `setx UV_PYTHON_PREFERENCE only-system`, then open a **new** terminal (and restart Kiro so it inherits it) |
+| npm in PowerShell | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` (once), or call `npm.cmd` instead of `npm` |
 | Node | Installed (v26 locally; CI uses 22 — fine) |
 | Check the scaffold | `python -I .github/scripts/check_repo.py` → all `ok` |
 
@@ -32,6 +34,12 @@ first PBT counterexample, the first MCP call, and keep `docs/kiro-journal.md` up
 
 ---
 
+### Smart App Control (why the commands say `python -m`)
+Windows Smart App Control is **on** for this PC and blocks unsigned `.exe` launchers such as `pytest.exe`, `mypy.exe`,
+`uvicorn.exe` and `necro.exe`. Always run tools as `uv run python -m <tool>`. Tested: `python -m pytest`, `ruff`,
+`mypy` and `uvicorn` all work on the signed python.org interpreter; esbuild/rollup (Vite) also work. The steering
+(`tech.md`) tells Kiro the same, so its commands and hooks follow this form.
+
 ## Prompt template
 
 Paste into Kiro chat for each batch, replacing the spec and task numbers:
@@ -40,7 +48,7 @@ Paste into Kiro chat for each batch, replacing the spec and task numbers:
 Execute tasks <A>–<B> of .kiro/specs/<spec>/tasks.md in order, following the steering docs.
 For each task:
 1. Implement it, including its tests.
-2. From backend/, run: uv run ruff check . ; uv run mypy --strict necro ; uv run pytest -q
+2. From backend/, run: uv run python -m ruff check . ; uv run python -m mypy --strict necro ; uv run python -m pytest -q
    and fix until green.
 3. Tick the task's checkbox in tasks.md.
 4. git commit with a conventional message and the trailer "kiro-task: <spec>/<task id>".
@@ -57,13 +65,13 @@ You can also open `tasks.md` and use **Start task** above each task. Batching th
 
 | # | Spec · tasks | What you get | Checkpoint (must pass before moving on) | Est. |
 |---|---|---|---|---|
-| 1 | necro-engine · **1** | `backend/` skeleton, pyproject, conftest, Hypothesis profiles | `cd backend; uv run pytest -q` runs. `git push` → CI **backend** job runs and is green | 30 m |
-| 2 | necro-engine · **2–3** | IR, sets, masks, names, redaction, evaluator, zones, NAT model | `uv run pytest -q -m pbt` green (P8, P9) | 1.5 h |
-| 3 | necro-engine · **4** | PIX/ASA ≤ 8.2 + IOS parsers, detection, coverage, golden-flow test (source side) | `uv run pytest -q tests/test_golden_flows.py` green for PIX, ASA 8.2, IOS | 1.5 h |
+| 1 | necro-engine · **1** | `backend/` skeleton, pyproject, conftest, Hypothesis profiles | `cd backend; uv run python -m pytest -q` runs. `git push` → CI **backend** job runs and is green | 30 m |
+| 2 | necro-engine · **2–3** | IR, sets, masks, names, redaction, evaluator, zones, NAT model | `uv run python -m pytest -q -m pbt` green (P8, P9) | 1.5 h |
+| 3 | necro-engine · **4** | PIX/ASA ≤ 8.2 + IOS parsers, detection, coverage, golden-flow test (source side) | `uv run python -m pytest -q tests/test_golden_flows.py` green for PIX, ASA 8.2, IOS | 1.5 h |
 | 4 | necro-engine · **5–6** | Autopsy, PAN-OS emitter + reader | Autopsy recall test = 100% on seeded `! GHOST:` lines | 1.5 h |
-| 5 | necro-engine · **7–8** | Ledger, **Proof of Life** oracle | `HYPOTHESIS_PROFILE=ci uv run pytest -q -m pbt` green; haunted-emitter test produces a shrunk counterexample | 1.5 h |
-| 6 | necro-engine · **9** (do 9.2–9.4; 9.1 comes with batch 7) | API, MCP server, `necro` CLI | `uv run necro prove ../samples/dead-configs/pix-2006-hq.cfg --profile ci` reports 0 divergences. Set `"disabled": false` for `necromancer` in `.kiro/settings/mcp.json` and call it from Kiro chat (screenshot) | 1 h |
-| 7 | migration-governance · **1–9** | Gates, verdict, audit header, Grimoire, runbook, `necro gate` | `uv run necro gate ../samples/dead-configs/pix-2006-hq.cfg` prints a verdict with blocking reasons | 2 h |
+| 5 | necro-engine · **7–8** | Ledger, **Proof of Life** oracle | `$env:HYPOTHESIS_PROFILE="ci"; uv run python -m pytest -q -m pbt` green; haunted-emitter test produces a shrunk counterexample | 1.5 h |
+| 6 | necro-engine · **9** (do 9.2–9.4; 9.1 comes with batch 7) | API, MCP server, `necro` CLI | `uv run python -m necro prove ../samples/dead-configs/pix-2006-hq.cfg --profile ci` reports 0 divergences. Set `"disabled": false` for `necromancer` in `.kiro/settings/mcp.json` and call it from Kiro chat (screenshot) | 1 h |
+| 7 | migration-governance · **1–9** | Gates, verdict, audit header, Grimoire, runbook, `necro gate` | `uv run python -m necro gate ../samples/dead-configs/pix-2006-hq.cfg` prints a verdict with blocking reasons | 2 h |
 | 8 | graveyard-ui · **1–7** | Haunted UI: graveyard → autopsy → resurrect → proof → verdict + Grimoire | `npm --prefix frontend run dev` + backend running: the full ritual works on `pix-2006-hq` in the browser | 2.5 h |
 | 9 | Deploy | S3 + CloudFront UI, FastAPI on Lambda, $1 budget alarm | Public URL works in an incognito window | 1.5 h |
 | 10 | Optional | graveyard-ui 8–9, Kiro Crew Séance run, vibe-coding spike | Screenshots | — |
@@ -82,10 +90,10 @@ Backend (terminal 1):
 ```powershell
 cd "D:\Gen AI Program\necromancer_kiro\backend"
 uv sync
-uv run pytest -q                                   # all tests (dev profile)
-uv run necro prove ..\samples\dead-configs\pix-2006-hq.cfg --profile demo
-uv run necro gate  ..\samples\dead-configs\pix-2006-hq.cfg
-uv run uvicorn necro.api:app --reload --port 8000  # API at http://localhost:8000/healthz
+uv run python -m pytest -q                                   # all tests (dev profile)
+uv run python -m necro prove ..\samples\dead-configs\pix-2006-hq.cfg --profile demo
+uv run python -m necro gate  ..\samples\dead-configs\pix-2006-hq.cfg
+uv run python -m uvicorn necro.api:app --reload --port 8000  # API at http://localhost:8000/healthz
 ```
 (Kiro may choose a different module path for the API; use what task 9.2 created.)
 
