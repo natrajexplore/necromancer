@@ -25,6 +25,7 @@ All configs here are **synthetic**. They use RFC 5737 / RFC 1918 addresses and f
 | Pre-8.3 ACL uses the mapped address | ASA 8.2 `OUTSIDE_IN#7`, golden `A82-10` |
 | 8.3+ ACL uses the real address → PAN-OS pre-NAT IP | ASA 9.8, golden `A98-01..07` |
 | Global ACL removes the implicit permit | ASA 9.8, golden `A98-12/13` |
+| Interface ACL falls through to the global ACL; an explicit deny is final | ASA 9.8 `DMZ_IN`, golden `A98-14/15` |
 | Same-security inter-interface | ASA 9.8 partner → dmz, golden `A98-08` |
 | `neq`, inclusive `range`, nested groups, `tcp-udp` groups | ASA 8.2, IOS golden `IOS-09..11` |
 | `inactive` ACE | ASA 8.2 `OUTSIDE_IN#8`, golden `A82-11` |

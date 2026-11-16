@@ -36,7 +36,7 @@ Best catch by a hook: __.
 - `fetch` MCP for reading vendor docs during the parser work.
 
 ## 6. Property-based testing
-Properties P1–P14 (`.kiro/steering/pbt-playbook.md`), plus 55 hand-verified golden flows that are independent of the evaluator. Headline: the **Proof of Life oracle** is PBT used *as a product feature*, not only for tests. The mutation sanity suite (10 mutants, incl. swapped `lt`/`gt`, an untranslated 8.3+ NAT destination and ICMP widened to `ping`) shows it catches each one with a shrunk counterexample: `__`.
+Properties P1–P14 (`.kiro/steering/pbt-playbook.md`), plus 58 hand-verified golden flows that are independent of the evaluator. Headline: the **Proof of Life oracle** is PBT used *as a product feature*, not only for tests. The mutation sanity suite (10 mutants, incl. swapped `lt`/`gt`, an untranslated 8.3+ NAT destination and ICMP widened to `ping`) shows it catches each one with a shrunk counterexample: `__`.
 
 ## 7. Kiro surfaces: IDE vs CLI vs Web vs Crew
 | Surface | Used for | Strength | Friction |

@@ -164,7 +164,7 @@ expect_to_zone = "outside"
 
 [[flow]]
 id = "A98-13"
-note = "DMZ (50) to outside (0) would be allowed by security level, but the global ACL now governs and does not match"
+note = "DMZ (50) to outside (0) would be allowed by security level; DMZ_IN has no match and no final deny, the global ACL does not match either, so the implicit deny applies"
 context = "dmz:in"
 protocol = "tcp"
 src = "10.60.0.10"
@@ -174,3 +174,42 @@ dport = 443
 expect_action = "deny"
 expect_rule = "implicit-deny"
 expect_to_zone = "outside"
+
+[[flow]]
+id = "A98-14"
+note = "Fall-through: DMZ_IN has no match and no implicit deny of its own while a global ACL exists, so GLOBAL_POLICY#4 permits"
+context = "dmz:in"
+protocol = "udp"
+src = "10.60.0.10"
+sport = 50000
+dst = "192.0.2.53"
+dport = 53
+expect_action = "permit"
+expect_rule = "GLOBAL_POLICY#4"
+expect_to_zone = "outside"
+
+[[flow]]
+id = "A98-15"
+note = "An explicit deny in the interface ACL is final, even though GLOBAL_POLICY#4 would permit this flow"
+context = "dmz:in"
+protocol = "udp"
+src = "10.60.0.10"
+sport = 50000
+dst = "10.50.0.53"
+dport = 53
+expect_action = "deny"
+expect_rule = "DMZ_IN#2"
+expect_to_zone = "inside"
+
+[[flow]]
+id = "A98-16"
+note = "DMZ (50) to inside (100): permitted by the interface ACL (8.3+ needs no NAT for this)"
+context = "dmz:in"
+protocol = "tcp"
+src = "10.60.0.10"
+sport = 40000
+dst = "10.50.0.30"
+dport = 1433
+expect_action = "permit"
+expect_rule = "DMZ_IN#1"
+expect_to_zone = "inside"

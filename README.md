@@ -112,7 +112,7 @@ both catch it.
   `ci` 5,000, `demo` 10,000 examples per context.
 - **Shrunk counterexamples.** When the policies diverge, you get the single smallest packet that proves it, with both
   decisions and zones: *the packet that refused to rest*.
-- **Golden flows.** 55 expected decisions, worked out by hand from vendor semantics and kept independent of the
+- **Golden flows.** 58 expected decisions, worked out by hand from vendor semantics and kept independent of the
   evaluator, so the oracle can't grade its own homework.
 - **Mutation sanity suite.** 10 deliberate emitter bugs (swapped `lt`/`gt`, untranslated 8.3+ NAT destination, ICMP
   widened to `ping`, ...) must each be caught.
@@ -185,7 +185,7 @@ The backend and frontend jobs switch on automatically once Kiro generates `backe
 .github/                 CI workflow + repo-integrity checks
 samples/dead-configs/    synthetic PIX 6.3 / ASA 8.2 / ASA 9.8 / IOS 12.4 configs with seeded "! GHOST:" rules
 samples/broken-configs/  negative fixtures (cycles, undefined groups, unsupported constructs, out-of-scope modes)
-samples/golden-flows/    55 hand-verified expected decisions (TOML), independent of the evaluator
+samples/golden-flows/    58 hand-verified expected decisions (TOML), independent of the evaluator
 crew/                    Kiro Crew "Séance" workflow
 docs/                    rules analysis, idea selection, build plan, Kiro write-up, video script, Devpost draft
 ```
@@ -212,7 +212,7 @@ python -I .github/scripts/check_repo.py
 
 ## Roadmap
 - [x] Specs, steering, hooks, agents and MCP configuration
-- [x] Synthetic samples, negative fixtures and 55 golden flows
+- [x] Synthetic samples, negative fixtures and 58 golden flows
 - [x] CI with repo-integrity checks
 - [ ] **necro-engine** Phase 1: IR, PIX/ASA ≤ 8.2/IOS parsers, evaluator, autopsy, PAN-OS emitter, Proof of Life, MCP server
 - [ ] **migration-governance**: gates G1–G6, verdict, audit header, Grimoire, runbook, `necro gate`

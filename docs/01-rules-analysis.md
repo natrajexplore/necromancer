@@ -34,9 +34,9 @@ Sponsor: Amazon Web Services · Administrator: Devpost.
 | R1 | Fits the theme and uses Kiro meaningfully (Stage 1 pass/fail) | Resurrection category. Built through Kiro specs → tasks, hooks, steering, custom agents, MCP and Crew | ☐ |
 | R2 | Built **with Kiro** (IDE / CLI / Web / Crew). Too little Kiro use is a DQ | All app code is written by running Kiro over `.kiro/specs/*/tasks.md`. Keep Kiro chat/session evidence | ☐ |
 | R3 | **New work**, started after Oct 30. Any pre-existing code is disclosed | Fresh repo. **Don't copy code** from ConfigGuard, the CrewAI FW reviewer or BGP executor. Concepts can carry over; code can't | ☐ |
-| R4 | Public **GitHub** repo (not GitLab or Bitbucket) | `github.com/natrajexplore/necromancer` | ☐ |
-| R5 | OSI license visible in the repo **About** section | MIT `LICENSE` at the root. Check GitHub detects it | ☐ |
-| R6 | `/.kiro` at the root with specs, hooks and steering, **not gitignored** | Present. `.gitignore` explicitly leaves it alone | ☐ |
+| R4 | Public **GitHub** repo (not GitLab or Bitbucket) | `github.com/natrajexplore/necromancer` | ✅ (verified Nov 16) |
+| R5 | OSI license visible in the repo **About** section | MIT `LICENSE` at the root. Check GitHub detects it | ✅ (verified Nov 16) |
+| R6 | `/.kiro` at the root with specs, hooks and steering, **not gitignored** | Present. `.gitignore` explicitly leaves it alone | ✅ (verified Nov 16) |
 | R7 | Working app URL, free to test until Jan 29 | Hosted on AWS free tier. Deterministic core needs no paid API key | ☐ |
 | R8 | Video **under 3:00**, public on YouTube, shows the real app | Script in `05-demo-video-script.md`, target 2:45 | ☐ |
 | R9 | No unlicensed trademarks or copyrighted music in the video | Royalty-free or self-made audio. No vendor logos. Vendor names only as plain text | ☐ |

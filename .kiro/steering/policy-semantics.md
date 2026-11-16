@@ -60,6 +60,7 @@ entry if it can't be expressed exactly.
 ### 1.5 NAT and address space (the classic migration trap)
 - **PIX 6.x** always enforces nat-control: a flow with no matching `nat`/`static`/`nat 0` translation is
   dropped **even if the ACL permits it**. **ASA 7.0–8.2** does this only when `nat-control` is configured.
+  (PIX 6.x has no `nat-control` command; the behaviour is built in. Checked 2026-11-16.)
   The evaluator must model this as `implicit-deny` with reason `no-translation`.
 - **Pre-8.3** (`static (real_if,mapped_if) mapped real ...`): ACLs on the mapped side reference the
   **mapped** (global) address.
