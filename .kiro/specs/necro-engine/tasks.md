@@ -8,24 +8,24 @@
   - Commit `uv.lock`; confirm the existing `.github/workflows/ci.yml` backend job activates and passes (adjust only if a command differs from tech steering)
   - _Requirements: 6.2, 8.2, 8.3, 8.4_
 
-- [ ] 2. IR and normalized sets
-- [ ] 2.1 `sets.py`: `PortSet` and `AddrSet` with normalization (sort, merge, clamp) plus `contains`, `intersect`, `subtract`, `covers`; PBT P9
+- [x] 2. IR and normalized sets
+- [x] 2.1 `sets.py`: `PortSet` and `AddrSet` with normalization (sort, merge, clamp) plus `contains`, `intersect`, `subtract`, `covers`; PBT P9
   - _Requirements: 2.2_
-- [ ] 2.2 `ir.py`: `Match`, `Rule`, `Interface`, `Route`, `NatRule`, `Binding`, `Context`, `MgmtAccess`, `LineRecord`, `Policy`, `Flow`, `Decision`
+- [x] 2.2 `ir.py`: `Match`, `Rule`, `Interface`, `Route`, `NatRule`, `Binding`, `Context`, `MgmtAccess`, `LineRecord`, `Policy`, `Flow`, `Decision`
   - _Requirements: 2.1_
-- [ ] 2.3 `masks.py`: subnet ↔ wildcard conversion, rejecting non-contiguous masks; PBT P7
+- [x] 2.3 `masks.py`: subnet wildcard conversion, rejecting non-contiguous masks; PBT P7
   - _Requirements: 1.1, 1.2, 1.12_
-- [ ] 2.4 `names.py`: (protocol, name) tables from policy-semantics §4, with unit tests for the 514/512/radius traps
+- [x] 2.4 `names.py`: (protocol, name) tables from policy-semantics section 4, with unit tests for the 514/512/radius traps
   - _Requirements: 1.10_
-- [ ] 2.5 `redact.py`: every pattern in security steering; PBT P10 over generated configs
+- [x] 2.5 `redact.py`: every pattern in security steering; PBT P10 over generated configs
   - _Requirements: 1.6_
 
-- [ ] 3. Evaluator, zones, NAT model
-- [ ] 3.1 `zones.py`: route table + longest-prefix match + `self`
+- [x] 3. Evaluator, zones, NAT model
+- [x] 3.1 `zones.py`: route table + longest-prefix match + `self`
   - _Requirements: 2.5_
-- [ ] 3.2 `evaluate.py`: `decide()` with first-match, implicit deny, inactive-skip, security levels, same-security, nat-control, IOS no-ACL permit, outbound ACLs; PBT P8
+- [x] 3.2 `evaluate.py`: `decide()` with first-match, implicit deny, inactive-skip, security levels, same-security, nat-control, IOS no-ACL permit, outbound ACLs; PBT P8
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 1.7_
-- [ ] 3.3 `nat.py`: pre-8.3 `static`/`nat`/`global` model + `translates()` for nat-control
+- [x] 3.3 `nat.py`: pre-8.3 `static`/`nat`/`global` model + `translates()` for nat-control
   - _Requirements: 2.4, 4.11_
 
 - [ ] 4. Parsers
