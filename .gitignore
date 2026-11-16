@@ -13,3 +13,7 @@ frontend/dist/
 .env.*
 *.log
 .DS_Store
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
