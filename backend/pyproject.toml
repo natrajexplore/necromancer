@@ -1,0 +1,59 @@
+[project]
+name = "necromancer"
+version = "0.1.0"
+description = "Raise dead firewall configs as zero-trust policy, and prove they came back the same."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic>=2.7",
+    "mangum>=0.19",
+    "mcp>=1.3",
+    "uvicorn[standard]>=0.30",
+]
+
+[project.scripts]
+necro = "necro.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["necro"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pytest-cov>=5.0",
+    "hypothesis>=6.100",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "pip-audit>=2.7",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["necro"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "pbt: property-based tests (run with HYPOTHESIS_PROFILE=ci for the full budget)",
+]
+
+[tool.coverage.run]
+source = ["necro"]
+omit = ["necro/__main__.py"]
+
+[tool.coverage.report]
+fail_under = 90
