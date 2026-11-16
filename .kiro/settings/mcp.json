@@ -9,7 +9,7 @@
         "python",
         "mcp_server.py"
       ],
-      "disabled": false,
+      "disabled": true,
       "autoApprove": [
         "exhume",
         "autopsy",

@@ -220,7 +220,7 @@ python -I .github/scripts/check_repo.py
 - [ ] Hosted demo (S3 + CloudFront, FastAPI on Lambda)
 - [ ] Phase 2: ASA 8.3+ object NAT, PAN-OS NAT rule emission, hit-count import, PDF/CSV export
 
-The day-by-day plan is in [`docs/03-build-plan.md`](docs/03-build-plan.md).
+The day-by-day plan is in [`docs/03-build-plan.md`](docs/03-build-plan.md). The build-day guide (Kiro prompts, checkpoints, how to run) is in [`docs/07-build-day-guide.md`](docs/07-build-day-guide.md).
 
 ## Security and data notice
 - All sample configs are **synthetic**: RFC 5737 / RFC 1918 addresses and fake secrets. CI fails if a non-synthetic

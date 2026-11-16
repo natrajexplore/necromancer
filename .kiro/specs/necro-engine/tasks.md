@@ -84,7 +84,7 @@
   - _Requirements: 7.1_
 - [ ] 9.2 FastAPI `/v1` endpoints + `/healthz` + mangum handler + limits + structured errors + security headers
   - _Requirements: 7.2, 7.5_
-- [ ] 9.3 MCP server (`FastMCP`, stdio) with tools exhume/autopsy/resurrect/prove/gate; register in `.kiro/settings/mcp.json`
+- [ ] 9.3 MCP server (`FastMCP`, stdio) with tools exhume/autopsy/resurrect/prove/gate; register in `.kiro/settings/mcp.json` and set `"disabled": false` (it stays disabled until this task)
   - _Requirements: 7.3_
 - [ ] 9.4 `necro` CLI with formats, seed, profile and exit codes
   - _Requirements: 7.4_
