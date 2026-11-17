@@ -13,9 +13,9 @@
   - _Requirements: 2.2_
 - [x] 2.2 `ir.py`: `Match`, `Rule`, `Interface`, `Route`, `NatRule`, `Binding`, `Context`, `MgmtAccess`, `LineRecord`, `Policy`, `Flow`, `Decision`
   - _Requirements: 2.1_
-- [x] 2.3 `masks.py`: subnet wildcard conversion, rejecting non-contiguous masks; PBT P7
+- [x] 2.3 `masks.py`: subnet ↔ wildcard conversion, rejecting non-contiguous masks; PBT P7
   - _Requirements: 1.1, 1.2, 1.12_
-- [x] 2.4 `names.py`: (protocol, name) tables from policy-semantics section 4, with unit tests for the 514/512/radius traps
+- [x] 2.4 `names.py`: (protocol, name) tables from policy-semantics §4, with unit tests for the 514/512/radius traps
   - _Requirements: 1.10_
 - [x] 2.5 `redact.py`: every pattern in security steering; PBT P10 over generated configs
   - _Requirements: 1.6_
