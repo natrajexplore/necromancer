@@ -1,4 +1,4 @@
-"""Tests for redact.py (task 2.5) — includes PBT P10.
+"""Tests for redact.py (task 2.5) -- includes PBT P10.
 
 The test strings like "SomeSekret", "hunter2", etc. are synthetic placeholders
 used exclusively to verify that the redaction engine removes them. They are
@@ -8,7 +8,7 @@ test inputs, not real credentials.
 from __future__ import annotations
 
 import pytest
-from hypothesis import given
+from hypothesis import example, given
 from hypothesis import strategies as st
 
 from necro.redact import redact, redact_lines
@@ -235,7 +235,17 @@ def test_redact_lines_function() -> None:
 
 
 # ---------------------------------------------------------------------------
-# PBT P10: no generated secret appears verbatim in redacted output
+# PBT P10: redacted output has the value position replaced with exactly
+# <redacted>, not merely "secret not in output".
+#
+# The old oracle (assert secret not in out) was wrong for secrets that are
+# substrings of a keyword prefix.  Example: secret="taca" is a substring of
+# "tacacs-server", so the correct redacted line "tacacs-server key <redacted>"
+# still contains "taca" -- that is correct behaviour, not a leak.
+#
+# The fix: reconstruct the exact expected line and assert equality.  This is
+# stricter than the old check: it verifies both that the value was replaced
+# and that nothing else on the line changed.
 # ---------------------------------------------------------------------------
 
 _secret_st = st.text(
@@ -251,38 +261,41 @@ _secret_st = st.text(
 @pytest.mark.pbt
 @given(secret=_secret_st)
 def test_pbt_enable_password_redacted(secret: str) -> None:
-    """enable password <secret>: generated secret never appears in redacted output."""
+    """enable password <secret>: value position is exactly <redacted>."""
     line = f"enable password {secret}"
-    out = redact(line)
-    if secret != REDACTED:
-        assert secret not in out
+    out = redact(line).rstrip("\n")
+    assert out == f"enable password {REDACTED}"
 
 
 @pytest.mark.pbt
 @given(secret=_secret_st)
 def test_pbt_snmp_community_redacted(secret: str) -> None:
-    """snmp-server community <secret>: generated secret never appears in redacted output."""
+    """snmp-server community <secret> RO: value position is exactly <redacted>."""
     line = f"snmp-server community {secret} RO"
-    out = redact(line)
-    if secret != REDACTED:
-        assert secret not in out
+    out = redact(line).rstrip("\n")
+    assert out == f"snmp-server community {REDACTED} RO"
 
 
 @pytest.mark.pbt
 @given(secret=_secret_st)
 def test_pbt_pre_shared_key_redacted(secret: str) -> None:
-    """pre-shared-key <secret>: generated secret never appears in redacted output."""
+    """pre-shared-key <secret>: value position is exactly <redacted>."""
     line = f"pre-shared-key {secret}"
-    out = redact(line)
-    if secret != REDACTED:
-        assert secret not in out
+    out = redact(line).rstrip("\n")
+    assert out == f"pre-shared-key {REDACTED}"
 
 
 @pytest.mark.pbt
+@example(secret="taca")
 @given(secret=_secret_st)
 def test_pbt_tacacs_key_redacted(secret: str) -> None:
-    """tacacs-server key <secret>: generated secret never appears in redacted output."""
+    """tacacs-server key <secret>: value position is exactly <redacted>.
+
+    The old oracle (assert secret not in out) failed for secrets that are
+    substrings of the keyword prefix -- e.g. secret="taca" appears in
+    "tacacs-server" even after correct redaction.  The fix is to assert the
+    full reconstructed line, which is both stricter and correct.
+    """
     line = f"tacacs-server key {secret}"
-    out = redact(line)
-    if secret != REDACTED:
-        assert secret not in out
+    out = redact(line).rstrip("\n")
+    assert out == f"tacacs-server key {REDACTED}"
