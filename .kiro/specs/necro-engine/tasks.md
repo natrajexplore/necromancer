@@ -39,7 +39,7 @@
   - _Requirements: 1.3_
 - [x] 4.4 `coverage.py`: classify every line; PBT P14
   - _Requirements: 1.9_
-- [ ] 4.5 Renderer per dialect (IR → text) and PBT P1 round-trip
+- [x] 4.5 Renderer per dialect (IR → text) and PBT P1 round-trip
   - _Requirements: 1.8_
 - [ ] 4.6 `tests/test_golden_flows.py` for PIX, ASA 8.2 and IOS vectors (original side)
   - _Requirements: 2.7_
