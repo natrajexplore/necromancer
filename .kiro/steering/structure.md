@@ -19,11 +19,17 @@ inclusion: always
     coverage.py           Line classification and coverage accounting
     parsers/
       detect.py           Dialect + version + mode detection with confidence
-      cisco_common.py     Shared tokenizer, address/port operand parsing
+      cisco_common.py     Shared tokenizer, address/port operand parsing, LineLedger (one class per line)
+      cisco_groups.py     PIX/ASA object-group expansion, cycle and undefined-group errors
       pix_asa.py          PIX 6.x / ASA 7.x-8.2 (names, object-groups, ACLs, access-group, static/nat/global)
+      pix_asa_ace.py, pix_asa_stmts.py, pix_asa_finish.py, pix_asa_tables.py   ACE, single-line statements, second pass, keyword tables
       asa_objects.py      ASA 8.3+ object / object-group / object NAT / global ACL
       ios_acl.py          IOS 12 standard + extended ACLs, bindings, ACL classification
+      ios_ace.py, ios_finish.py, ios_tables.py   IOS ACE, zones/routes/bindings/ACL classes, keyword tables
       panos_reader.py     Parses emitted PAN-OS set commands back into IR (used by the oracle)
+    contexts.py           One inbound context per interface (what decide() is called with)
+    renderers/            IR -> source-dialect text (round-trip proofs and fixtures, never a migration artifact)
+      cisco_pix_asa.py, cisco_ios.py
     emitters/
       panos.py            PAN-OS set-command emitter (zones, objects, rules, NAT, schedules, mgmt profiles)
       panos_names.py      Deterministic, collision-free PAN-OS identifiers
