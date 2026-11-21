@@ -52,7 +52,7 @@
   - _Requirements: 3.3, 3.4, 3.5, 3.6, 3.8, 3.9, 3.10, 3.13, 3.14_
 
 - [ ] 6. PAN-OS emitter + reader
-- [ ] 6.1 Zones, objects, groups, services (neq → two ranges), rules in order, implicit-permit rules, explicit final deny; `panos_names.py`; PBT P12
+- [x] 6.1 Zones, objects, groups, services (neq → two ranges), rules in order, implicit-permit rules, explicit final deny; `panos_names.py`; PBT P12
   - _Requirements: 4.1, 4.2, 4.4, 4.6, 4.8_
 - [ ] 6.2 To-zone per rule with splitting
   - _Requirements: 4.5_

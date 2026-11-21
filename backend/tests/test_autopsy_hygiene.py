@@ -12,7 +12,7 @@ import ipaddress
 from pathlib import Path
 
 import pytest
-from hypothesis import event, given
+from hypothesis import event, given, settings
 from hypothesis import strategies as st
 
 from necro.autopsy import FindingType, Severity, analyze, without_rule
@@ -301,6 +301,7 @@ def small_policies(draw: st.DrawFn) -> Policy:
 
 
 @pytest.mark.pbt
+@settings(deadline=None)  # decide() over a whole policy is slow under coverage
 @given(st.data())
 def test_p3_removing_a_flagged_rule_changes_no_decision_small(data: st.DataObject) -> None:
     policy = data.draw(small_policies())
@@ -311,6 +312,7 @@ def test_p3_removing_a_flagged_rule_changes_no_decision_small(data: st.DataObjec
 
 
 @pytest.mark.pbt
+@settings(deadline=None)  # decide() over a whole policy is slow under coverage
 @given(st.data())
 def test_p3_removing_a_flagged_rule_changes_no_decision_generated(data: st.DataObject) -> None:
     policy = data.draw(pix_asa_policies() | ios_policies())
@@ -321,6 +323,7 @@ def test_p3_removing_a_flagged_rule_changes_no_decision_generated(data: st.DataO
 
 @pytest.mark.pbt
 @pytest.mark.parametrize("name", ["pix-2006-hq.cfg", "asa-8.2-branch.cfg", "ios-12-edge.cfg"])
+@settings(deadline=None)
 @given(st.data())
 def test_p3_on_the_samples(name: str, data: st.DataObject) -> None:
     policy = parse_config((SAMPLES / name).read_text(encoding="utf-8"))
