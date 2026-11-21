@@ -315,5 +315,6 @@ class Policy(BaseModel):
     same_security_intra: bool = False  # same-security-traffic permit intra-interface
 
     input_sha256: str = ""
+    detection_confidence: float = 0.0  # [0, 1]; 1.0 when the dialect was given explicitly
 
     model_config = {"arbitrary_types_allowed": True}

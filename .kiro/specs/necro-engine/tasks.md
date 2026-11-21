@@ -35,7 +35,7 @@
 - [x] 4.2 `ios_acl.py`: standard + extended (numbered, named, sequence numbers, remark, established), interface bindings in/out, ip route, ACL classification by reference, vty access-class
   - Fixtures: `ios-12-edge.cfg`, `broken-configs/ios-unsupported-constructs.cfg` (every `EXPECT-UNPARSED` reason matches)
   - _Requirements: 1.2, 1.11, 1.12_
-- [ ] 4.3 `detect.py`: dialect, OS version and mode with confidence
+- [x] 4.3 `detect.py`: dialect, OS version and mode with confidence
   - _Requirements: 1.3_
 - [ ] 4.4 `coverage.py`: classify every line; PBT P14
   - _Requirements: 1.9_
