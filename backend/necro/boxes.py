@@ -15,7 +15,7 @@ from __future__ import annotations
 import ipaddress
 from dataclasses import dataclass
 
-from necro.ir import Flow, Match
+from necro.ir import Flow, Match, Rule
 from necro.sets import AddrSet, PortSet
 
 KIND_TCP = "tcp"
@@ -69,6 +69,25 @@ class Box:
         box = Box(self.kind, tuple(dims))
         return None if box.is_empty() else box
 
+    def describe(self) -> str:
+        """A short human-readable form for ledger entries and reports."""
+        src, dst = _addr_text(self.dims[0]), _addr_text(self.dims[1])
+        if self.kind in (KIND_TCP, KIND_UDP):
+            sport, dport, est = self.dims[2:]
+            parts = [f"{self.kind} {src} -> {dst}"]
+            if sport != PortSet.any():
+                parts.append(f"sport {_spec(sport)}")
+            if dport != PortSet.any():
+                parts.append(f"dport {_spec(dport)}")
+            if est == PortSet([(1, 1)]):
+                parts.append("established")
+            return " ".join(parts)
+        if self.kind == KIND_ICMP:
+            types = self.dims[2]
+            suffix = "" if types == PortSet([(0, _ICMP_NONE)]) else f" type {_spec(types)}"
+            return f"icmp {src} -> {dst}{suffix}"
+        return f"ip protocol {_spec(self.dims[2])} {src} -> {dst}"
+
     def contains(self, flow: Flow) -> bool:
         """Whether ``flow`` lies in this box (used to check boxes against ``decide()``)."""
         values: list[ipaddress.IPv4Address | int] = [flow.src, flow.dst]
@@ -105,6 +124,18 @@ class Box:
             icmp_type = None if value == _ICMP_NONE else value
             return Flow(src=src, dst=dst, proto=1, icmp_type=icmp_type)
         return Flow(src=src, dst=dst, proto=value)
+
+
+def _spec(ports: _Dim) -> str:
+    return ",".join(str(iv.lo) if iv.lo == iv.hi else f"{iv.lo}-{iv.hi}" for iv in ports.intervals)
+
+
+def _addr_text(dim: _Dim) -> str:
+    assert isinstance(dim, AddrSet)
+    if dim == AddrSet.any():
+        return "any"
+    nets = dim.to_networks()
+    return str(nets[0]) if len(nets) == 1 else f"{nets[0]} and {len(nets) - 1} more"
 
 
 def _intersect(a: _Dim, b: _Dim) -> _Dim:
@@ -162,6 +193,19 @@ def subtract_all(pieces: list[Box], covers: list[Box]) -> list[Box]:
         if not pieces:
             break
     return pieces
+
+
+def effective_regions(rules: list[Rule]) -> list[tuple[Rule, list[Box]]]:
+    """Each active rule with the flows that reach it (its boxes minus all earlier rules)."""
+    out: list[tuple[Rule, list[Box]]] = []
+    earlier: list[Box] = []
+    for rule in rules:
+        if rule.inactive:
+            continue
+        mine = boxes_of(rule.match)
+        out.append((rule, subtract_all(list(mine), earlier)))
+        earlier += mine
+    return out
 
 
 def overlaps(a: list[Box], b: list[Box]) -> bool:

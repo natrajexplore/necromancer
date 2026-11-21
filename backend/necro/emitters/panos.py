@@ -10,8 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from necro.contexts import build_contexts
+from necro.emitters.panos_mgmt import plan_management, profile_lines, to_the_box_entries
 from necro.emitters.panos_names import NameRegistry
-from necro.emitters.panos_network import ZoneMap, network_lines
+from necro.emitters.panos_network import ZoneMap, device_addresses, network_lines
 from necro.emitters.panos_objects import ANY, ObjectTable, name_list, name_token
 from necro.emitters.panos_rules import (
     TAG_FINAL_DENY,
@@ -22,6 +23,7 @@ from necro.emitters.panos_rules import (
     final_deny_spec,
 )
 from necro.ir import Action, Policy
+from necro.ledger import LedgerEntry, number_entries
 from necro.zones import build_route_table
 
 _LOG_END = "log-end yes"
@@ -39,6 +41,7 @@ class PanosEmission:
     zones: ZoneMap
     rule_sources: dict[str, str] = field(default_factory=dict)  # PAN-OS rule name -> source rule id
     unsupported: list[str] = field(default_factory=list)  # not expressed; blocks the verdict
+    ledger: list[LedgerEntry] = field(default_factory=list)  # expressed lossily, on the record
 
     @property
     def text(self) -> str:
@@ -64,12 +67,13 @@ def _rule_lines(name: str, spec: RuleSpec, objects: ObjectTable) -> list[str]:
     head = f"set rulebase security rules {name_token(name)}"
     proto = spec.proto
     service = objects.service(proto, spec.sport, spec.dport) if proto in (6, 17) else ANY
+    applications = objects.applications(proto, spec.icmp_types)
     lines = [
         f"{head} from {spec.from_zone}",
         f"{head} to {spec.to_zone}",
         f"{head} source {objects.address(spec.src)}",
         f"{head} destination {objects.address(spec.dst)}",
-        f"{head} application {ANY}",
+        f"{head} application {name_list(applications)}",
         f"{head} service {service}",
         f"{head} action {'allow' if spec.action == Action.permit else 'deny'}",
     ]
@@ -89,11 +93,13 @@ def _rule_lines(name: str, spec: RuleSpec, objects: ObjectTable) -> list[str]:
 def emit_panos(policy: Policy) -> PanosEmission:
     """Emit the PAN-OS candidate config for ``policy``."""
     zones = ZoneMap.build(policy)
-    env = BuildEnv(policy, zones, build_route_table(policy), unsupported=[])
+    env = BuildEnv(policy, zones, build_route_table(policy), device_addresses(policy), [])
     specs: list[RuleSpec] = []
     for ctx in build_contexts(policy):
         specs += context_specs(env, ctx)
     specs.append(final_deny_spec())
+    plan = plan_management(env)
+    env.ledger += to_the_box_entries(env, plan)
 
     objects = ObjectTable(policy.name_aliases)
     names = NameRegistry()
@@ -110,6 +116,8 @@ def emit_panos(policy: Policy) -> PanosEmission:
         *objects.address_lines(),
         *objects.group_lines(),
         *objects.service_lines(),
+        *objects.application_lines(),
+        *profile_lines(env, plan),
         *rule_lines,
     ]
-    return PanosEmission(lines, zones, sources, env.unsupported)
+    return PanosEmission(lines, zones, sources, env.unsupported, number_entries(env.ledger))

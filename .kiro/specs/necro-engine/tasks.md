@@ -56,7 +56,7 @@
   - _Requirements: 4.1, 4.2, 4.4, 4.6, 4.8_
 - [x] 6.2 To-zone per rule with splitting
   - _Requirements: 4.5_
-- [ ] 6.3 ICMP-type and IP-protocol custom applications; lossy-mapping ledger entries; established omission; mgmt profiles
+- [x] 6.3 ICMP-type and IP-protocol custom applications; lossy-mapping ledger entries; established omission; mgmt profiles
   - _Requirements: 4.3, 4.7, 4.9, 4.10_
 - [ ] 6.4 Pre-8.3 address-space handling
   - _Requirements: 4.11_

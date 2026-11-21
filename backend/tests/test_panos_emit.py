@@ -113,11 +113,12 @@ def test_every_emitted_name_is_a_valid_identifier(config: str) -> None:
 
 
 @pytest.mark.parametrize("config", CONFIGS)
-def test_baseline_never_uses_application_default(config: str) -> None:
+def test_baseline_is_port_based_and_never_uses_application_default(config: str) -> None:
     emission = emit_panos(policy_of(config))
     assert "application-default" not in emission.text
     for name, attrs in rules_of(emission.lines).items():
-        assert attrs["application"] == "any", name
+        apps = attrs["application"].replace("[", " ").replace("]", " ").split()
+        assert all(a == "any" or a.startswith("necro-") for a in apps), name
 
 
 @pytest.mark.parametrize("config", CONFIGS)

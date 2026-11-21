@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 from necro.emitters.panos_names import ZONE_MAX_LEN, NameRegistry
 from necro.ir import Context, Dialect, Policy
+from necro.sets import AddrSet
 
 
 @dataclass
@@ -44,6 +45,15 @@ class ZoneMap:
         if policy.dialect == Dialect.ios:
             return self.by_hw[ctx.interface]
         return self.by_nameif[ctx.interface]
+
+
+def device_addresses(policy: Policy) -> AddrSet:
+    """Every address the device owns (its interface addresses)."""
+    owned = AddrSet()
+    for iface in policy.interfaces:
+        if iface.ip_address is not None:
+            owned = owned.union(AddrSet.from_host(iface.ip_address.ip))
+    return owned
 
 
 def network_lines(policy: Policy, zones: ZoneMap) -> list[str]:

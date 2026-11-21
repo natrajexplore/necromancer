@@ -16,7 +16,7 @@ import ipaddress
 from dataclasses import dataclass
 from enum import IntEnum
 
-from necro.boxes import KIND_TCP, KIND_UDP, Box, boxes_of, subtract_all
+from necro.boxes import KIND_TCP, KIND_UDP, Box, effective_regions
 from necro.contexts import build_contexts
 from necro.evaluate import decide
 from necro.findings import SEVERITY_RANK, Finding, FindingType, Severity, make_finding
@@ -67,19 +67,6 @@ def source_zones(policy: Policy, acl: str) -> list[str]:
 
 def worst_trust(policy: Policy, zones: list[str]) -> Trust:
     return max((zone_trust(policy, z) for z in zones), default=Trust.internal)
-
-
-def effective_regions(rules: list[Rule]) -> list[tuple[Rule, list[Box]]]:
-    """Each active rule with the flows that reach it (its boxes minus all earlier rules)."""
-    out: list[tuple[Rule, list[Box]]] = []
-    earlier: list[Box] = []
-    for rule in rules:
-        if rule.inactive:
-            continue
-        mine = boxes_of(rule.match)
-        out.append((rule, subtract_all(list(mine), earlier)))
-        earlier += mine
-    return out
 
 
 def witness_flows(pieces: list[Box], limit: int = 3) -> list[Flow]:

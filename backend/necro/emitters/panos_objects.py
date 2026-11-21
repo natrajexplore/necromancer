@@ -19,6 +19,13 @@ _TCP = 6
 _UDP = 17
 _PROTOCOL_NAMES = {_TCP: "tcp", _UDP: "udp"}
 _MAX_SERVICE_LABEL = 40
+ICMP = 1
+_APP_HEAD = "category networking subcategory ip-protocol technology network-protocol risk 1"
+
+
+def ip_protocol_app_name(number: int) -> str:
+    """Name of the custom application that matches IP protocol ``number``."""
+    return f"necro-ipproto-{number}"
 
 
 def port_spec(ports: PortSet) -> str:
@@ -52,6 +59,7 @@ class ObjectTable:
         self._address_defs: dict[str, str] = {}
         self._group_members: dict[str, list[str]] = {}
         self._service_defs: dict[str, str] = {}
+        self._app_defs: dict[str, str] = {}
 
     # -- addresses ------------------------------------------------------------------------
 
@@ -103,6 +111,36 @@ class ObjectTable:
         self._service_defs[name] = f"set service {name} protocol {label} port {dp}{source}"
         return name
 
+    # -- applications ---------------------------------------------------------------------
+
+    def applications(self, proto: int | None, icmp_types: frozenset[int] | None) -> list[str]:
+        """Applications that make a rule match exactly this protocol (``any`` when none needed).
+
+        TCP, UDP and ``ip`` are matched by service objects. ICMP restricted to types gets one custom
+        application per type; ICMP of every type, and any other IP protocol, gets a custom
+        application on the protocol number. The ``ping`` and ``icmp`` App-IDs are never used: they
+        are broader than a single type (policy-semantics section 6).
+        """
+        if proto == ICMP and icmp_types is not None:
+            return [self._icmp_type_app(t) for t in sorted(icmp_types)]
+        if proto is not None and proto not in _PROTOCOL_NAMES:
+            return [self._ip_protocol_app(proto)]
+        return [ANY]
+
+    def _icmp_type_app(self, icmp_type: int) -> str:
+        name = f"necro-icmp-{icmp_type}"
+        self._app_defs[name] = (
+            f"set application {name} {_APP_HEAD} default ident-by-icmp-type type {icmp_type}"
+        )
+        return name
+
+    def _ip_protocol_app(self, number: int) -> str:
+        name = ip_protocol_app_name(number)
+        self._app_defs[name] = (
+            f"set application {name} {_APP_HEAD} default ident-by-ip-protocol {number}"
+        )
+        return name
+
     # -- output ---------------------------------------------------------------------------
 
     def address_lines(self) -> list[str]:
@@ -116,3 +154,6 @@ class ObjectTable:
 
     def service_lines(self) -> list[str]:
         return [self._service_defs[n] for n in sorted(self._service_defs)]
+
+    def application_lines(self) -> list[str]:
+        return [self._app_defs[n] for n in sorted(self._app_defs)]
