@@ -246,7 +246,6 @@ class Context(BaseModel):
     interface: str  # nameif
     acl_name: str = ""  # empty means no ACL bound (security-level logic applies)
     global_acl_name: str = ""  # ASA 8.3+ global ACL, if any
-    egress_acl_name: str = ""  # access-group out ACL, if any
     address_space: AddressSpace = AddressSpace.as_is
 
 
@@ -272,6 +271,9 @@ class Policy(BaseModel):
 
     # ACL name -> ordered list of Rules
     acls: dict[str, list[Rule]] = Field(default_factory=dict)
+
+    # egress interface nameif -> outbound ACL name (access-group <acl> out interface <nameif>)
+    egress_acls: dict[str, str] = Field(default_factory=dict)
 
     nat_rules: list[NatRule] = Field(default_factory=list)
     nat_control: bool = False  # ASA only; PIX always enforces it

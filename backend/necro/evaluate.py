@@ -153,16 +153,10 @@ def _lookup_interface_level(policy: Policy, nameif: str) -> int:
 def decide(policy: Policy, context: Context, flow: Flow) -> Decision:
     """Evaluate flow in context and return a Decision.
 
-    Total function: always returns a Decision, never raises.
+    Total over well-formed flows (P8) by construction, not by catching errors:
+    an unexpected exception is a bug and must surface.
     """
-    try:
-        return _decide_inner(policy, context, flow)
-    except Exception:  # noqa: BLE001  — P8 guarantee
-        return Decision(
-            action=Action.deny,
-            rule_id="implicit-deny",
-            reason="internal error in evaluator (treated as deny)",
-        )
+    return _decide_inner(policy, context, flow)
 
 
 def _decide_inner(policy: Policy, context: Context, flow: Flow) -> Decision:
@@ -294,14 +288,26 @@ def _apply_egress_acl(
     to_zone: str,
     ingress_decision: Decision,
 ) -> Decision:
-    """Check the egress ACL after ingress permits. Returns ingress decision if no egress ACL."""
-    egress_acl = context.egress_acl_name
+    """Check the egress interface's outbound ACL after ingress permits (policy-semantics 1.4).
+
+    The ACL is looked up by the flow's egress interface (``to_zone``), never by the
+    ingress context. An egress interface with no outbound ACL leaves the ingress
+    decision unchanged. A bound outbound ACL has an implicit deny.
+    """
+    egress_acl = policy.egress_acls.get(to_zone)
     if not egress_acl:
         return ingress_decision
 
     rules = policy.acls.get(egress_acl, [])
     result = _eval_acl(rules, flow)
-    if result is None or result.action == Action.permit:
+    if result is None:
+        return Decision(
+            action=Action.deny,
+            rule_id="implicit-deny",
+            to_zone="",
+            reason="egress ACL implicit deny",
+        )
+    if result.action == Action.permit:
         return ingress_decision
     return Decision(
         action=Action.deny,

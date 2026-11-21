@@ -84,7 +84,6 @@ def _context(
     nameif: str,
     acl_name: str = "",
     global_acl: str = "",
-    egress_acl: str = "",
     address_space: AddressSpace = AddressSpace.as_is,
 ) -> Context:
     return Context(
@@ -92,7 +91,6 @@ def _context(
         interface=nameif,
         acl_name=acl_name,
         global_acl_name=global_acl,
-        egress_acl_name=egress_acl,
         address_space=address_space,
     )
 
@@ -303,8 +301,9 @@ def test_egress_acl_denies_after_ingress_permit() -> None:
         dialect=Dialect.asa,
         interfaces=[inside, outside],
         acls={"IN_ACL": [ingress_permit], "OUT_ACL": [egress_deny_smtp]},
+        egress_acls={"outside": "OUT_ACL"},
     )
-    ctx = _context("inside", acl_name="IN_ACL", egress_acl="OUT_ACL")
+    ctx = _context("inside", acl_name="IN_ACL")
     flow = _flow("10.0.0.5", "192.0.2.50", proto=6, dst_port=25)
     d = decide(policy, ctx, flow)
     assert d.action == Action.deny
@@ -499,8 +498,177 @@ def test_egress_acl_permits_pass_through() -> None:
         dialect=Dialect.asa,
         interfaces=[inside, outside],
         acls={"IN_ACL": [ingress_permit], "OUT_ACL": [egress_permit]},
+        egress_acls={"outside": "OUT_ACL"},
     )
-    ctx = _context("inside", acl_name="IN_ACL", egress_acl="OUT_ACL")
+    ctx = _context("inside", acl_name="IN_ACL")
     flow = _flow("10.0.0.5", "192.0.2.50")
     d = decide(policy, ctx, flow)
     assert d.action == Action.permit
+
+
+# ---------------------------------------------------------------------------
+# Outbound ACLs belong to the egress interface (policy-semantics 1.4)
+# ---------------------------------------------------------------------------
+
+
+def _three_zone_policy(egress_acls: dict[str, str], dmz_out: list[Rule]) -> Policy:
+    inside = _iface("inside", 100, "10.0.0.1/24")
+    dmz = _iface("dmz", 50, "198.51.100.1/24")
+    outside = _iface("outside", 0, "192.0.2.1/24")
+    return Policy(
+        dialect=Dialect.asa,
+        interfaces=[inside, dmz, outside],
+        acls={
+            "OUTSIDE_IN": [_rule("OUTSIDE_IN", 1, Action.permit)],
+            "DMZ_OUT": dmz_out,
+            "OUTSIDE_OUT": [_rule("OUTSIDE_OUT", 1, Action.deny)],
+            "INSIDE_OUT": [_rule("INSIDE_OUT", 1, Action.deny)],
+        },
+        egress_acls=egress_acls,
+    )
+
+
+# outside -> dmz, the egress interface is dmz
+_OUTSIDE_TO_DMZ = _flow("203.0.113.9", "198.51.100.10", proto=6, dst_port=80)
+
+
+def test_egress_acl_is_looked_up_by_egress_interface_permit() -> None:
+    policy = _three_zone_policy(
+        {"dmz": "DMZ_OUT"},
+        [_rule("DMZ_OUT", 1, Action.permit, proto=6, dst_ports=PortSet.single(80))],
+    )
+    d = decide(policy, _context("outside", acl_name="OUTSIDE_IN"), _OUTSIDE_TO_DMZ)
+    assert d.action == Action.permit
+    assert d.rule_id == "OUTSIDE_IN#1"
+    assert d.to_zone == "dmz"
+
+
+def test_egress_acl_explicit_deny_reports_egress_rule() -> None:
+    policy = _three_zone_policy(
+        {"dmz": "DMZ_OUT"},
+        [_rule("DMZ_OUT", 1, Action.deny, proto=6, dst_ports=PortSet.single(80))],
+    )
+    d = decide(policy, _context("outside", acl_name="OUTSIDE_IN"), _OUTSIDE_TO_DMZ)
+    assert d.action == Action.deny
+    assert d.rule_id == "DMZ_OUT#1"
+    assert d.reason == "denied by egress ACL"
+
+
+def test_egress_acl_no_match_is_implicit_deny() -> None:
+    policy = _three_zone_policy(
+        {"dmz": "DMZ_OUT"},
+        [_rule("DMZ_OUT", 1, Action.permit, proto=6, dst_ports=PortSet.single(443))],
+    )
+    d = decide(policy, _context("outside", acl_name="OUTSIDE_IN"), _OUTSIDE_TO_DMZ)
+    assert d.action == Action.deny
+    assert d.rule_id == "implicit-deny"
+    assert d.reason == "egress ACL implicit deny"
+
+
+def test_egress_acl_empty_or_undefined_is_implicit_deny() -> None:
+    empty = _three_zone_policy({"dmz": "DMZ_OUT"}, [])
+    undefined = _three_zone_policy({"dmz": "MISSING_ACL"}, [])
+    for policy in (empty, undefined):
+        d = decide(policy, _context("outside", acl_name="OUTSIDE_IN"), _OUTSIDE_TO_DMZ)
+        assert d.action == Action.deny
+        assert d.rule_id == "implicit-deny"
+        assert d.reason == "egress ACL implicit deny"
+
+
+def test_egress_acl_applies_with_security_level_permit_and_global_acl() -> None:
+    """The egress check also runs after the implicit security-level permit and the global ACL."""
+    deny_all_dmz = [_rule("DMZ_OUT", 1, Action.deny)]
+    policy = _three_zone_policy({"dmz": "DMZ_OUT"}, deny_all_dmz)
+    inside_to_dmz = _flow("10.0.0.5", "198.51.100.10")
+    d = decide(policy, _context("inside"), inside_to_dmz)  # 100 -> 50 implicit permit
+    assert d.action == Action.deny
+    assert d.rule_id == "DMZ_OUT#1"
+
+    policy.acls["GLOBAL"] = [_rule("GLOBAL", 1, Action.permit)]
+    d = decide(policy, _context("inside", global_acl="GLOBAL"), inside_to_dmz)
+    assert d.action == Action.deny
+    assert d.rule_id == "DMZ_OUT#1"
+
+
+def test_out_acl_on_other_interfaces_is_unaffected() -> None:
+    """Out-ACLs on the ingress interface or an unrelated interface don't filter outside -> dmz."""
+    policy = _three_zone_policy(
+        {"outside": "OUTSIDE_OUT", "inside": "INSIDE_OUT"},
+        [_rule("DMZ_OUT", 1, Action.deny)],
+    )
+    d = decide(policy, _context("outside", acl_name="OUTSIDE_IN"), _OUTSIDE_TO_DMZ)
+    assert d.action == Action.permit
+    assert d.rule_id == "OUTSIDE_IN#1"
+    assert d.to_zone == "dmz"
+
+
+def test_egress_acl_does_not_filter_ingress_denies() -> None:
+    """An ingress deny stays the ingress deny; the egress ACL is never consulted."""
+    policy = _three_zone_policy({"dmz": "DMZ_OUT"}, [_rule("DMZ_OUT", 1, Action.permit)])
+    policy.acls["OUTSIDE_IN"] = [_rule("OUTSIDE_IN", 1, Action.deny)]
+    d = decide(policy, _context("outside", acl_name="OUTSIDE_IN"), _OUTSIDE_TO_DMZ)
+    assert d.action == Action.deny
+    assert d.rule_id == "OUTSIDE_IN#1"
+
+
+# ---------------------------------------------------------------------------
+# PBT P8, broader: all dialects, NAT-control, global ACL and egress ACLs.
+# decide() no longer swallows exceptions, so a raise here is a real failure.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.pbt
+@given(
+    src=_ip_st,
+    dst=_ip_st,
+    proto=_proto_st,
+    src_port=_port_st,
+    dst_port=_port_st,
+    icmp_type=_icmp_st,
+    established=st.booleans(),
+    dialect=st.sampled_from(list(Dialect)),
+    ingress=st.sampled_from(["inside", "dmz", "outside"]),
+    bind_ingress=st.booleans(),
+    bind_global=st.booleans(),
+    egress_names=st.lists(st.sampled_from(["inside", "dmz", "outside", "nowhere"]), max_size=4),
+    nat_control=st.booleans(),
+)
+def test_pbt_evaluator_never_raises_broad(
+    src: str,
+    dst: str,
+    proto: int,
+    src_port: int,
+    dst_port: int,
+    icmp_type: int | None,
+    established: bool,
+    dialect: Dialect,
+    ingress: str,
+    bind_ingress: bool,
+    bind_global: bool,
+    egress_names: list[str],
+    nat_control: bool,
+) -> None:
+    policy = _three_zone_policy(
+        {name: "DMZ_OUT" for name in egress_names},
+        [_rule("DMZ_OUT", 1, Action.permit, proto=6, dst_ports=PortSet.single(80))],
+    )
+    policy.dialect = dialect
+    policy.nat_control = nat_control
+    policy.acls["GLOBAL"] = [_rule("GLOBAL", 1, Action.permit, proto=6)]
+    ctx = _context(
+        ingress,
+        acl_name="OUTSIDE_IN" if bind_ingress else "",
+        global_acl="GLOBAL" if bind_global else "",
+    )
+    flow = Flow(
+        src=ipaddress.IPv4Address(src),
+        dst=ipaddress.IPv4Address(dst),
+        proto=proto,
+        src_port=src_port,
+        dst_port=dst_port,
+        icmp_type=icmp_type,
+        established=established,
+    )
+    d = decide(policy, ctx, flow)
+    assert d.action in (Action.permit, Action.deny)
+    assert d.rule_id
