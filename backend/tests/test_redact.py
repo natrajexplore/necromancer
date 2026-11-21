@@ -299,3 +299,21 @@ def test_pbt_tacacs_key_redacted(secret: str) -> None:
     line = f"tacacs-server key {secret}"
     out = redact(line).rstrip("\n")
     assert out == f"tacacs-server key {REDACTED}"
+
+
+def test_snmp_host_community_asa_form() -> None:
+    # ASA/PIX form: the community follows the literal keyword; the address must stay.
+    out = r("snmp-server host inside 192.0.2.10 poll community mycommunity version 2c")
+    assert out == "snmp-server host inside 192.0.2.10 poll community <redacted> version 2c"
+    assert r("snmp-server host inside 192.0.2.10 community trapcomm").endswith(
+        "community <redacted>"
+    )
+    # No community keyword: the IOS pattern still applies.
+    assert "mycommunity" not in r("snmp-server host 192.0.2.10 mycommunity")
+
+
+@pytest.mark.pbt
+@given(secret=_secret_st)
+def test_pbt_asa_snmp_host_community_redacted(secret: str) -> None:
+    line = f"snmp-server host inside 192.0.2.10 community {secret} version 2c"
+    assert r(line) == "snmp-server host inside 192.0.2.10 community <redacted> version 2c"

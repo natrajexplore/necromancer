@@ -173,6 +173,32 @@ def _redact_inline_hashes(line: str) -> str:
     return line
 
 
+def _redact_asa_snmp_host(line: str) -> str | None:
+    """ASA form: ``snmp-server host <if> <ip> ... community <c> ...``.
+
+    The community follows the literal keyword, so the IOS pattern (which assumes the community is
+    the first free token after the address) would redact the address and leak the community.
+    Returns None when the line is not in this form. Linear scan, no regex.
+    """
+    spans: list[tuple[int, int]] = []
+    start = -1
+    for i, ch in enumerate(line + " "):
+        if ch.isspace():
+            if start >= 0:
+                spans.append((start, i))
+                start = -1
+        elif start < 0:
+            start = i
+    words = [line[a:b] for a, b in spans]
+    if len(words) < 5 or words[0].lower() != "snmp-server" or words[1].lower() != "host":
+        return None
+    for idx in range(3, len(words) - 1):
+        if words[idx].lower() == "community":
+            a, b = spans[idx + 1]
+            return line[:a] + _REDACTED + line[b:]
+    return None
+
+
 def redact(text: str) -> str:
     """Redact all secrets from a firewall config text.
 
@@ -200,11 +226,15 @@ def redact(text: str) -> str:
             continue
 
         redacted_line = stripped
-        for pattern in _LINE_PATTERNS:
-            m = pattern.match(redacted_line)
-            if m:
-                redacted_line = m.group(1) + _REDACTED + m.group(3)
-                break
+        asa_snmp = _redact_asa_snmp_host(redacted_line)
+        if asa_snmp is not None:
+            redacted_line = asa_snmp
+        else:
+            for pattern in _LINE_PATTERNS:
+                m = pattern.match(redacted_line)
+                if m:
+                    redacted_line = m.group(1) + _REDACTED + m.group(3)
+                    break
 
         redacted_line = _redact_inline_hashes(redacted_line)
 
