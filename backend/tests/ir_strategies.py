@@ -7,6 +7,7 @@ could have produced from a config in that dialect, so ``parse(render(ir)) == ir`
 from __future__ import annotations
 
 import ipaddress
+from collections.abc import Iterable
 
 from hypothesis import strategies as st
 
@@ -15,6 +16,7 @@ from necro.ir import (
     AddressSpace,
     Binding,
     Dialect,
+    Flow,
     Interface,
     MgmtAccess,
     NatRule,
@@ -337,4 +339,47 @@ def ios_policies(draw: st.DrawFn) -> Policy:
         bindings=bindings,
         acls=acls,
         egress_acls=egress,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Flows biased toward rule boundaries
+# ---------------------------------------------------------------------------
+
+
+def _edges(values: Iterable[tuple[int, int]], limit: int) -> list[int]:
+    """lo-1, lo, hi, hi+1 of every interval, clamped to [0, limit]."""
+    out = {0, limit}
+    for lo, hi in values:
+        out.update(v for v in (lo - 1, lo, hi, hi + 1) if 0 <= v <= limit)
+    return sorted(out)
+
+
+def flows_near(matches: Iterable[IrMatch]) -> st.SearchStrategy[Flow]:
+    """Flows whose fields sit on or next to the boundaries of the given matches (70%), or are
+    uniform (30%), mirroring the oracle strategy in the PBT playbook."""
+    addr_iv: list[tuple[int, int]] = []
+    port_iv: list[tuple[int, int]] = []
+    icmp_types: set[int] = set()
+    for m in matches:
+        addr_iv += [(iv.lo, iv.hi) for iv in m.src.intervals + m.dst.intervals]
+        port_iv += [(iv.lo, iv.hi) for iv in m.src_ports.intervals + m.dst_ports.intervals]
+        icmp_types |= set(m.icmp_types or ())
+    addrs = _edges(addr_iv, 0xFFFFFFFF)
+    ports = _edges(port_iv, 65535)
+    addr = st.one_of(
+        st.sampled_from(addrs).map(ipaddress.IPv4Address),
+        st.integers(0, 0xFFFFFFFF).map(ipaddress.IPv4Address),
+    )
+    port = st.one_of(st.sampled_from(ports), st.integers(0, 65535))
+    icmp = st.one_of(st.none(), st.integers(0, 255), st.sampled_from(sorted(icmp_types or {8})))
+    return st.builds(
+        Flow,
+        src=addr,
+        dst=addr,
+        proto=st.sampled_from([1, 6, 17, 47, 50, 88, 89]),
+        src_port=port,
+        dst_port=port,
+        icmp_type=icmp,
+        established=st.booleans(),
     )

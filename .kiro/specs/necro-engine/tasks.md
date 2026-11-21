@@ -45,7 +45,7 @@
   - _Requirements: 2.7_
 
 - [ ] 5. Autopsy
-- [ ] 5.1 Shadowed and redundant detection using box coverage; PBT P3
+- [x] 5.1 Shadowed and redundant detection using box coverage; PBT P3
   - _Requirements: 3.1, 3.2, 3.7_
 - [ ] 5.2 Overly broad, insecure service, unused object/ACL, insecure management, unfiltered interface, return-traffic, no-remark findings with severity (zone trust), explanation and recommendation
   - Test: seeded-ghost recall = 100% on every sample (`test_autopsy_recall.py`)
