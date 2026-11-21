@@ -512,6 +512,7 @@ def test_vty_snmp_and_ntp_forms() -> None:
         ("snmp", AddrSet.any()),
         ("snmp", allowed),
         ("snmp", AddrSet.any()),
+        ("http", AddrSet.any()),  # plain "ip http server": management without TLS
     ]
     assert _reasons(p) == [
         "vty-access-class-direction",

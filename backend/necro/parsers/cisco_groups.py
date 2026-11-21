@@ -11,7 +11,7 @@ from __future__ import annotations
 import ipaddress
 from dataclasses import dataclass, field
 
-from necro.ir import ParseError
+from necro.ir import ObjectGroupInfo, ParseError
 from necro.names import resolve_protocol
 from necro.parsers.cisco_common import (
     LineLedger,
@@ -65,6 +65,7 @@ class GroupTable:
 
     def __init__(self) -> None:
         self.groups: dict[str, Group] = {}
+        self.used: set[str] = set()  # groups an ACE refers to
 
     def define(self, name: str, kind: str, port_proto: str, line: int) -> bool:
         """Open (or re-open) a group. Returns False when a re-open changes its kind."""
@@ -165,9 +166,26 @@ class GroupTable:
         group = self.groups.get(name)
         if group is None:
             raise ParseError("undefined-group", f"undefined object-group {name}", line_no)
+        self.used.add(name)
         if group.kind not in kinds:
             raise Unsupported("group-kind-mismatch")
         return group
+
+    def info(self) -> list[ObjectGroupInfo]:
+        """Every group with its usage: used by an ACE, or nested in a group that is."""
+        used: set[str] = set()
+        stack = [n for n in self.used if n in self.groups]
+        while stack:
+            name = stack.pop()
+            if name in used:
+                continue
+            used.add(name)
+            stack.extend(ref for ref, _ in self.groups[name].refs if ref in self.groups)
+        groups = sorted(self.groups.values(), key=lambda g: (g.line, g.name))
+        return [
+            ObjectGroupInfo(name=g.name, kind=g.kind, line=g.line, used=g.name in used)
+            for g in groups
+        ]
 
     def kind_of(self, name: str) -> str | None:
         group = self.groups.get(name)

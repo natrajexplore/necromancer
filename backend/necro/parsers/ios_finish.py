@@ -58,6 +58,7 @@ class IosState:
     raw_routes: list[RawRoute] = field(default_factory=list)
     vtys: list[IosVty] = field(default_factory=list)
     snmp: list[tuple[int, str]] = field(default_factory=list)
+    http_lines: list[int] = field(default_factory=list)  # plain "ip http server" lines
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +85,13 @@ def assign_zones(ifaces: list[IosIface]) -> list[Interface]:
         taken.add(name)
         st.nameif = name
         result.append(
-            Interface(hw_name=st.hw, nameif=name, ip_address=st.ip, description=st.description)
+            Interface(
+                hw_name=st.hw,
+                nameif=name,
+                ip_address=st.ip,
+                description=st.description,
+                source_line=st.line,
+            )
         )
     return result
 
@@ -241,12 +248,15 @@ def build_mgmt(state: IosState) -> list[MgmtAccess]:
                 state.ledger.unparsed(line_no, exc.reason, replace=True)
                 continue
         for proto in vty.transports or ["vty"]:
-            mgmt.append(MgmtAccess(proto=proto, src_addr=src))
+            mgmt.append(MgmtAccess(proto=proto, src_addr=src, source_line=vty.line_no))
     for line_no, acl in state.snmp:
         try:
             src = _source_set(state, acl) if acl else AddrSet.any()
         except Unsupported as exc:
             state.ledger.unparsed(line_no, exc.reason, replace=True)
             continue
-        mgmt.append(MgmtAccess(proto="snmp", src_addr=src, version="v1/v2c"))
+        mgmt.append(MgmtAccess(proto="snmp", src_addr=src, version="v1/v2c", source_line=line_no))
+    mgmt.extend(
+        MgmtAccess(proto="http", src_addr=AddrSet.any(), source_line=n) for n in state.http_lines
+    )
     return mgmt

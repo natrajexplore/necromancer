@@ -40,7 +40,7 @@ def core(policy: Policy, *, mgmt: bool = True) -> dict[str, object]:
         "mode": policy.mode,
         "address_space": policy.address_space,
         "name_aliases": policy.name_aliases,
-        "interfaces": policy.interfaces,
+        "interfaces": [i.model_copy(update={"source_line": 0}) for i in policy.interfaces],
         "routes": policy.routes,
         "bindings": policy.bindings,
         "acls": {
@@ -50,7 +50,9 @@ def core(policy: Policy, *, mgmt: bool = True) -> dict[str, object]:
         "egress_acls": policy.egress_acls,
         "nat_rules": policy.nat_rules,
         "nat_control": policy.nat_control,
-        "mgmt_access": policy.mgmt_access if mgmt else [],
+        "mgmt_access": [m.model_copy(update={"source_line": 0}) for m in policy.mgmt_access]
+        if mgmt
+        else [],
         "same_security_inter": policy.same_security_inter,
         "same_security_intra": policy.same_security_intra,
     }

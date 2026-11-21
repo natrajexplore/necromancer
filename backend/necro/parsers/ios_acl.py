@@ -380,6 +380,9 @@ class _IosParser:
             if len(tokens) == 4 and tokens[2].lower() == "access-class":
                 self.state.mgmt_refs.add(tokens[3])
                 self.ledger.mark(n, "management-plane", relevant=True)
+            elif [t.lower() for t in tokens[2:]] == ["server"]:
+                self.state.http_lines.append(n)  # plain HTTP management, no TLS
+                self.ledger.mark(n, "management-plane", relevant=True)
             else:
                 self.ledger.mark(n, "management-plane", relevant=False)
         elif sub == "nat":

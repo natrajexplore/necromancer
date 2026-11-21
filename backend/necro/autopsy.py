@@ -9,92 +9,28 @@ confirmed with ``decide()``, the single source of truth for semantics:
   rules. Confirmed when ``decide()`` gives the same action and egress zone with the rule removed.
 
 Rules that are not active (``inactive``) take no part in evaluation and are left alone.
+The other finding types live in ``necro.autopsy_checks``; ``analyze`` runs them all.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
-from enum import StrEnum
 
-from pydantic import BaseModel
-
-from necro import autopsy_text as text
+from necro.autopsy_checks import (
+    acl_contexts,
+    acl_findings,
+    interface_findings,
+    management_findings,
+    object_findings,
+    remark_findings,
+    rule_findings,
+)
 from necro.boxes import Box, boxes_of, overlaps, subtract_all
-from necro.contexts import build_contexts
 from necro.evaluate import decide
+from necro.findings import Finding, FindingType, Severity, make_finding
 from necro.ir import Action, Context, Flow, Policy, Rule
 
-
-class Severity(StrEnum):
-    critical = "critical"
-    high = "high"
-    medium = "medium"
-    low = "low"
-
-
-class FindingType(StrEnum):
-    shadowed = "shadowed"
-    redundant = "redundant"
-    overly_broad = "overly-broad"
-    insecure_service = "insecure-service"
-    unused_object = "unused-object"
-    unused_acl = "unused-acl"
-    insecure_management = "insecure-management"
-    unfiltered_interface = "unfiltered-interface"
-    return_traffic = "return-traffic"
-    no_remark = "no-remark"
-
-
-class Finding(BaseModel):
-    """One autopsy finding. ``rule_ref`` is a rule id (``ACL#3``) or a subject such as
-    ``interface:inside``; ``source_line`` is the line in the redacted source it points at."""
-
-    id: str = ""
-    type: FindingType
-    severity: Severity
-    rule_ref: str
-    related: list[str] = []
-    source_line: int = 0
-    zone: str = ""
-    explanation: str
-    recommendation: str
-    label: str
-    verified: bool = False  # confirmed with decide() on a witness flow
-
-
-def make_finding(
-    kind: FindingType,
-    severity: Severity,
-    rule_ref: str,
-    *,
-    related: list[str] | None = None,
-    source_line: int = 0,
-    zone: str = "",
-    verified: bool = False,
-    **details: str,
-) -> Finding:
-    """Build a finding with the standard wording for ``kind``."""
-    label, explanation, recommendation = text.render(kind.value, rule_ref=rule_ref, **details)
-    return Finding(
-        type=kind,
-        severity=severity,
-        rule_ref=rule_ref,
-        related=related or [],
-        source_line=source_line,
-        zone=zone,
-        explanation=explanation,
-        recommendation=recommendation,
-        label=label,
-        verified=verified,
-    )
-
-
-def acl_contexts(policy: Policy, acl: str) -> list[Context]:
-    """Inbound contexts in which ``acl`` is evaluated first (or alone, for a global ACL)."""
-    own = [c for c in build_contexts(policy) if c.acl_name == acl]
-    if own:
-        return own
-    return [c for c in build_contexts(policy) if c.global_acl_name == acl and not c.acl_name]
+__all__ = ["Finding", "FindingType", "Severity", "analyze", "without_rule"]
 
 
 def without_rule(policy: Policy, acl: str, rule: Rule) -> Policy:
@@ -227,6 +163,12 @@ def analyze(policy: Policy) -> list[Finding]:
     findings: list[Finding] = []
     for acl, rules in policy.acls.items():
         findings += hygiene_findings(policy, acl, rules)
+        findings += rule_findings(policy, acl, rules)
+    findings += remark_findings(policy)
+    findings += object_findings(policy)
+    findings += acl_findings(policy)
+    findings += management_findings(policy)
+    findings += interface_findings(policy)
     unique: dict[tuple[str, str], Finding] = {}
     for f in findings:
         unique.setdefault((f.type.value, f.rule_ref), f)

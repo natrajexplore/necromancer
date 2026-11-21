@@ -150,6 +150,7 @@ class _PixAsaParser:
             interfaces=interfaces,
             routes=routes,
             bindings=bindings,
+            object_groups=self.groups.info(),
             acls=acls,
             egress_acls=egress,
             nat_rules=self.nat_rules,
@@ -290,7 +291,7 @@ class _PixAsaParser:
     def _state_for(self, hw: str, n: int) -> IfaceState:
         st = self.by_hw.get(hw)
         if st is None:
-            st = IfaceState(Interface(hw_name=hw), n)
+            st = IfaceState(Interface(hw_name=hw, source_line=n), n)
             self.by_hw[hw] = st
             self.ifaces.append(st)
         return st
@@ -438,6 +439,7 @@ class _PixAsaParser:
         if access is None:
             self.ledger.mark(n, "management-plane", relevant=False)
         else:
+            access.source_line = n
             self.mgmt.append(access)
             self.ledger.mark(n, "management-plane", relevant=True)
 
@@ -446,12 +448,15 @@ class _PixAsaParser:
         if access is None:
             self.ledger.mark(n, "management-plane", relevant=False)
         else:
+            access.source_line = n
             self.mgmt.append(access)
             self.ledger.mark(n, "management-plane", relevant=True)
 
     def _cmd_snmp(self, n: int, tokens: list[str]) -> None:
         if len(tokens) > 1 and tokens[1].lower() == "host":
-            self.mgmt.append(stmts.parse_snmp_host(tokens, self.names))
+            host = stmts.parse_snmp_host(tokens, self.names)
+            host.source_line = n
+            self.mgmt.append(host)
             self.ledger.mark(n, "management-plane", relevant=True)
         else:
             self.ledger.mark(n, "management-plane", relevant=False)

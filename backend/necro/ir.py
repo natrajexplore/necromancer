@@ -117,6 +117,7 @@ class Interface(BaseModel):
     security_level: int = 0  # 0-100; higher is more trusted
     ip_address: ipaddress.IPv4Interface | None = None
     description: str = ""
+    source_line: int = 0  # line that declares the interface (nameif on PIX, header otherwise)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -177,8 +178,23 @@ class MgmtAccess(BaseModel):
     src_addr: AddrSet = Field(default_factory=AddrSet.any)
     interface: str = ""  # nameif the rule applies to
     version: str = ""  # SSH version, SNMP version, etc.
+    source_line: int = 0
 
     model_config = {"arbitrary_types_allowed": True}
+
+
+# ---------------------------------------------------------------------------
+# Object groups (kept for the unused-object finding)
+# ---------------------------------------------------------------------------
+
+
+class ObjectGroupInfo(BaseModel):
+    """An object-group definition and whether any ACE reaches it (directly or by nesting)."""
+
+    name: str
+    kind: str
+    line: int
+    used: bool
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +309,8 @@ class Policy(BaseModel):
     interfaces: list[Interface] = Field(default_factory=list)
     routes: list[Route] = Field(default_factory=list)
     bindings: list[Binding] = Field(default_factory=list)
+
+    object_groups: list[ObjectGroupInfo] = Field(default_factory=list)
 
     # ACL name -> ordered list of Rules
     acls: dict[str, list[Rule]] = Field(default_factory=dict)

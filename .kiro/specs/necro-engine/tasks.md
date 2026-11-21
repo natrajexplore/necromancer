@@ -44,10 +44,10 @@
 - [x] 4.6 `tests/test_golden_flows.py` for PIX, ASA 8.2 and IOS vectors (original side)
   - _Requirements: 2.7_
 
-- [ ] 5. Autopsy
+- [x] 5. Autopsy
 - [x] 5.1 Shadowed and redundant detection using box coverage; PBT P3
   - _Requirements: 3.1, 3.2, 3.7_
-- [ ] 5.2 Overly broad, insecure service, unused object/ACL, insecure management, unfiltered interface, return-traffic, no-remark findings with severity (zone trust), explanation and recommendation
+- [x] 5.2 Overly broad, insecure service, unused object/ACL, insecure management, unfiltered interface, return-traffic, no-remark findings with severity (zone trust), explanation and recommendation
   - Test: seeded-ghost recall = 100% on every sample (`test_autopsy_recall.py`)
   - _Requirements: 3.3, 3.4, 3.5, 3.6, 3.8, 3.9, 3.10, 3.13, 3.14_
 
