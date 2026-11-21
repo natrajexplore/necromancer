@@ -13,7 +13,7 @@ NOT_POLICY = _words(
     hostname enable service boot logging clock aaa username tacacs-server radius-server end exit
     memory-size vtp spanning-tree errdisable archive scheduler cdp lldp login privilege parser file
     mls power redundancy vlan mac-address-table ethernet license call-home key kron alias
-    ntp-server transceiver ip-sla track
+    ntp-server transceiver ip-sla track time-range
     """
 )
 

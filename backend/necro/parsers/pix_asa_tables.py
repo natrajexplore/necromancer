@@ -49,6 +49,7 @@ NOT_POLICY = frozenset(
         "jumbo-frame",
         "mac-address-table",
         "dns-guard",
+        "time-range",
     }
 )
 INSPECTION = frozenset({"fixup", "inspect", "class-map", "policy-map", "service-policy", "class"})

@@ -37,7 +37,7 @@
   - _Requirements: 1.2, 1.11, 1.12_
 - [x] 4.3 `detect.py`: dialect, OS version and mode with confidence
   - _Requirements: 1.3_
-- [ ] 4.4 `coverage.py`: classify every line; PBT P14
+- [x] 4.4 `coverage.py`: classify every line; PBT P14
   - _Requirements: 1.9_
 - [ ] 4.5 Renderer per dialect (IR → text) and PBT P1 round-trip
   - _Requirements: 1.8_

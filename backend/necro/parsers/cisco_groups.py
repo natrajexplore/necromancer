@@ -221,6 +221,8 @@ def _protocol_number(tokens: list[str]) -> int | None:
 def _service_object(tokens: list[str]) -> SvcSpec:
     if len(tokens) < 2:
         raise Unsupported("bad-service-object")
+    if tokens[1] == "object":
+        raise Unsupported("asa-8.3-object-reference")
     proto = _protocol_number(tokens[:2])
     if proto in (6, 17):
         proto_name = "tcp" if proto == 6 else "udp"
