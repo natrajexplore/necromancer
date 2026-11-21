@@ -6,36 +6,17 @@ through ``panos_reader`` and ``evaluate.decide`` (tasks 6.5, 8.x).
 
 from __future__ import annotations
 
-from functools import cache
-from pathlib import Path
-
 import pytest
 
 from necro.emitters import emit_panos
 from necro.emitters.panos_names import ZONE_MAX_LEN, is_valid_name
 from necro.emitters.panos_objects import ObjectTable, name_list, name_token, port_spec
-from necro.ir import Policy
 from necro.parsers import parse_config
 from necro.sets import AddrSet, PortSet
+from tests.panos_helpers import RULE_PREFIX, policy_of, rules_of
 
-SAMPLES = Path(__file__).resolve().parents[2] / "samples" / "dead-configs"
 CONFIGS = ["pix-2006-hq.cfg", "asa-8.2-branch.cfg", "ios-12-edge.cfg"]
-_RULE_PREFIX = "set rulebase security rules "
-
-
-@cache
-def policy_of(name: str) -> Policy:
-    return parse_config((SAMPLES / name).read_text(encoding="utf-8"))
-
-
-def rules_of(lines: list[str]) -> dict[str, dict[str, str]]:
-    """Rule name -> {attribute: value text}, in rulebase order."""
-    rules: dict[str, dict[str, str]] = {}
-    for line in lines:
-        if line.startswith(_RULE_PREFIX):
-            name, attr, *value = line.removeprefix(_RULE_PREFIX).split(" ", 2)
-            rules.setdefault(name, {})[attr] = " ".join(value)
-    return rules
+_RULE_PREFIX = RULE_PREFIX
 
 
 # -- objects ----------------------------------------------------------------------------------

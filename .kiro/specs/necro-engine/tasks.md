@@ -54,7 +54,7 @@
 - [ ] 6. PAN-OS emitter + reader
 - [x] 6.1 Zones, objects, groups, services (neq → two ranges), rules in order, implicit-permit rules, explicit final deny; `panos_names.py`; PBT P12
   - _Requirements: 4.1, 4.2, 4.4, 4.6, 4.8_
-- [ ] 6.2 To-zone per rule with splitting
+- [x] 6.2 To-zone per rule with splitting
   - _Requirements: 4.5_
 - [ ] 6.3 ICMP-type and IP-protocol custom applications; lossy-mapping ledger entries; established omission; mgmt profiles
   - _Requirements: 4.3, 4.7, 4.9, 4.10_

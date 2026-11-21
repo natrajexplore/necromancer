@@ -4,6 +4,10 @@ Each context's rules are emitted exactly as the source evaluates them: the inter
 global ACL (ASA 8.3+), then, where the source relied on an implicit permit, explicit allow rules
 tagged ``necro:implicit`` that reproduce it. A final deny from any zone to any zone closes
 the rulebase.
+
+A rule whose destination spans several egress zones is split into one rule per zone, in place, so
+first-match order is preserved (the pieces are disjoint). The zone comes from the source device's
+routing table (``RouteTable.partition``), the same lookup ``decide()`` uses.
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ from dataclasses import dataclass
 from necro.emitters.panos_network import ZoneMap
 from necro.ir import Action, Context, Dialect, Policy, Rule
 from necro.sets import AddrSet, PortSet
+from necro.zones import RouteTable
 
 TAG_IMPLICIT = "necro:implicit"
 TAG_FINAL_DENY = "necro:final-deny"
@@ -43,47 +48,63 @@ class RuleSpec:
 
 
 @dataclass
-class BuildNotes:
-    """What the rule builder could not express exactly (blocks the verdict until resolved)."""
+class BuildEnv:
+    """What rule building needs: the source policy, zone names, routes, and a list of gaps."""
 
-    unsupported: list[str]
+    policy: Policy
+    zones: ZoneMap
+    routes: RouteTable
+    unsupported: list[str]  # constructs not expressed exactly (blocks the verdict until resolved)
 
 
 def _seq(rule: Rule) -> int:
     return int(rule.id.rsplit("#", 1)[1])
 
 
-def acl_rule_specs(
-    policy: Policy, acl: str, from_zone: str, zones: ZoneMap, notes: BuildNotes
-) -> list[RuleSpec]:
+def zone_pieces(env: BuildEnv, dst: AddrSet) -> list[tuple[str, AddrSet]]:
+    """Split a destination set by egress zone, in interface order, unrouted space last.
+
+    A destination of ``any`` spans every zone, so it stays one piece with the zone ``any``.
+    """
+    if dst == AddrSet.any():
+        return [(ANY_ZONE, dst)]
+    order = {zone: index for index, zone in enumerate(env.zones.order)}
+    pieces = [(env.zones.of_nameif(nameif), part) for nameif, part in env.routes.partition(dst)]
+    return sorted(pieces, key=lambda piece: order.get(piece[0], len(order)))
+
+
+def acl_rule_specs(env: BuildEnv, acl: str, from_zone: str) -> list[RuleSpec]:
     """Rules of one ACL, in order. Inactive rules stay in place and are emitted disabled."""
     specs: list[RuleSpec] = []
-    for rule in policy.acls.get(acl, []):
+    for rule in env.policy.acls.get(acl, []):
         m = rule.match
         if m.proto not in (None, 6, 17):
-            notes.unsupported.append(f"{rule.id}: ip protocol {m.proto} needs a custom application")
+            env.unsupported.append(f"{rule.id}: ip protocol {m.proto} needs a custom application")
             continue
         if m.established:
-            notes.unsupported.append(f"{rule.id}: 'established' has no PAN-OS equivalent")
+            env.unsupported.append(f"{rule.id}: 'established' has no PAN-OS equivalent")
             continue
-        specs.append(
-            RuleSpec(
-                key=f"{acl}-{_seq(rule)}",
-                source=rule.id,
-                from_zone=from_zone,
-                to_zone=ANY_ZONE,
-                src=m.src,
-                dst=m.dst,
-                proto=m.proto,
-                sport=m.src_ports,
-                dport=m.dst_ports,
-                icmp_types=m.icmp_types,
-                action=rule.action,
-                disabled=rule.inactive,
-                remark=rule.remark[:_DESCRIPTION_MAX],
-                tags=(f"src-acl:{acl}",),
+        base = f"{acl}-{_seq(rule)}"
+        pieces = zone_pieces(env, m.dst)
+        for index, (to_zone, dst) in enumerate(pieces, start=1):
+            specs.append(
+                RuleSpec(
+                    key=base if len(pieces) == 1 else f"{base}-z{index}",
+                    source=rule.id,
+                    from_zone=from_zone,
+                    to_zone=to_zone,
+                    src=m.src,
+                    dst=dst,
+                    proto=m.proto,
+                    sport=m.src_ports,
+                    dport=m.dst_ports,
+                    icmp_types=m.icmp_types,
+                    action=rule.action,
+                    disabled=rule.inactive,
+                    remark=rule.remark[:_DESCRIPTION_MAX],
+                    tags=(f"src-acl:{acl}",),
+                )
             )
-        )
     return specs
 
 
@@ -104,9 +125,7 @@ def _implicit(key: str, source: str, from_zone: str, to_zone: str) -> RuleSpec:
     )
 
 
-def security_level_specs(
-    policy: Policy, from_zone: str, ctx: Context, zones: ZoneMap
-) -> list[RuleSpec]:
+def security_level_specs(env: BuildEnv, from_zone: str, ctx: Context) -> list[RuleSpec]:
     """Allow rules for the implicit security-level permits of an interface with no ACL.
 
     ``_security_level_decision`` in ``evaluate.py`` is the source of truth: higher to lower level,
@@ -114,10 +133,11 @@ def security_level_specs(
     interface only with ``permit intra-interface``. Flows with no route (zone ``any``) count as
     level 0.
     """
+    policy = env.policy
     levels = {i.nameif: i.security_level for i in policy.interfaces if i.nameif}
     src_level = levels.get(ctx.interface, 0)
     specs: list[RuleSpec] = []
-    targets = [(nameif, zones.by_nameif[nameif]) for nameif in levels] + [(ANY_ZONE, ANY_ZONE)]
+    targets = [(nameif, env.zones.by_nameif[nameif]) for nameif in levels] + [(ANY_ZONE, ANY_ZONE)]
     for nameif, zone in targets:
         if nameif == ctx.interface:
             allowed = policy.same_security_intra
@@ -132,23 +152,22 @@ def security_level_specs(
     return specs
 
 
-def context_specs(
-    policy: Policy, ctx: Context, zones: ZoneMap, notes: BuildNotes
-) -> list[RuleSpec]:
+def context_specs(env: BuildEnv, ctx: Context) -> list[RuleSpec]:
     """Every rule for packets entering on ``ctx``, in evaluation order."""
-    from_zone = zones.of_context(policy, ctx)
+    policy = env.policy
+    from_zone = env.zones.of_context(policy, ctx)
     if policy.dialect == Dialect.ios:
         if not ctx.acl_name:
             key = f"implicit-{from_zone}-to-any"
             return [_implicit(key, "implicit-permit-no-acl", from_zone, ANY_ZONE)]
-        return acl_rule_specs(policy, ctx.acl_name, from_zone, zones, notes)
+        return acl_rule_specs(env, ctx.acl_name, from_zone)
     specs: list[RuleSpec] = []
     if ctx.acl_name:
-        specs += acl_rule_specs(policy, ctx.acl_name, from_zone, zones, notes)
+        specs += acl_rule_specs(env, ctx.acl_name, from_zone)
     if ctx.global_acl_name:
-        specs += acl_rule_specs(policy, ctx.global_acl_name, from_zone, zones, notes)
+        specs += acl_rule_specs(env, ctx.global_acl_name, from_zone)
     if not ctx.acl_name and not ctx.global_acl_name:
-        specs += security_level_specs(policy, from_zone, ctx, zones)
+        specs += security_level_specs(env, from_zone, ctx)
     return specs
 
 

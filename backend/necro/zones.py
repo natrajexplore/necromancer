@@ -17,6 +17,7 @@ import ipaddress
 from dataclasses import dataclass
 
 from necro.ir import Policy
+from necro.sets import AddrSet
 
 
 @dataclass
@@ -78,6 +79,29 @@ class RouteTable:
                 return entry.interface
 
         return "any"
+
+    def partition(self, addresses: AddrSet) -> list[tuple[str, AddrSet]]:
+        """Split ``addresses`` by egress interface: ``to_zone`` applied to every address at once.
+
+        Longest prefix wins, exactly as in ``to_zone``. Addresses no route covers come last, under
+        ``"any"``. Device addresses stay with the interface whose network holds them (``to_zone``
+        reports them as ``"self"``; a rule's destination zone is still that interface's zone).
+        """
+        remaining = addresses
+        parts: dict[str, AddrSet] = {}
+        for entry in self._entries:
+            if remaining.is_empty():
+                break
+            hit = remaining.intersect(AddrSet.from_network(entry.network))
+            if hit.is_empty():
+                continue
+            known = parts.get(entry.interface)
+            parts[entry.interface] = hit if known is None else known.union(hit)
+            remaining = remaining.subtract(hit)
+        result = list(parts.items())
+        if not remaining.is_empty():
+            result.append(("any", remaining))
+        return result
 
     def interface_for_ip(self, ip: ipaddress.IPv4Address) -> str:
         """Return the nameif of the connected subnet that contains ip, or ""."""

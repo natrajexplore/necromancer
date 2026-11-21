@@ -16,12 +16,13 @@ from necro.emitters.panos_objects import ANY, ObjectTable, name_list, name_token
 from necro.emitters.panos_rules import (
     TAG_FINAL_DENY,
     TAG_IMPLICIT,
-    BuildNotes,
+    BuildEnv,
     RuleSpec,
     context_specs,
     final_deny_spec,
 )
 from necro.ir import Action, Policy
+from necro.zones import build_route_table
 
 _LOG_END = "log-end yes"
 _TAG_COMMENTS = {
@@ -88,10 +89,10 @@ def _rule_lines(name: str, spec: RuleSpec, objects: ObjectTable) -> list[str]:
 def emit_panos(policy: Policy) -> PanosEmission:
     """Emit the PAN-OS candidate config for ``policy``."""
     zones = ZoneMap.build(policy)
-    notes = BuildNotes(unsupported=[])
+    env = BuildEnv(policy, zones, build_route_table(policy), unsupported=[])
     specs: list[RuleSpec] = []
     for ctx in build_contexts(policy):
-        specs += context_specs(policy, ctx, zones, notes)
+        specs += context_specs(env, ctx)
     specs.append(final_deny_spec())
 
     objects = ObjectTable(policy.name_aliases)
@@ -111,4 +112,4 @@ def emit_panos(policy: Policy) -> PanosEmission:
         *objects.service_lines(),
         *rule_lines,
     ]
-    return PanosEmission(lines, zones, sources, notes.unsupported)
+    return PanosEmission(lines, zones, sources, env.unsupported)
