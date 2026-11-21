@@ -29,7 +29,7 @@
   - _Requirements: 2.4, 4.11_
 
 - [ ] 4. Parsers
-- [ ] 4.1 `pix_asa.py`: names, interfaces/nameif/security-level, routes, object-groups (+ nested, cycle and undefined detection), extended ACLs (remark/log/inactive/time-range), access-group in/out, same-security-traffic, nat-control, static/nat/global, telnet/ssh/http mgmt
+- [x] 4.1 `pix_asa.py`: names, interfaces/nameif/security-level, routes, object-groups (+ nested, cycle and undefined detection), extended ACLs (remark/log/inactive/time-range), access-group in/out, same-security-traffic, nat-control, static/nat/global, telnet/ssh/http mgmt
   - Fixtures: `pix-2006-hq.cfg`, `asa-8.2-branch.cfg`, `broken-configs/asa-*.cfg`
   - _Requirements: 1.1, 1.4, 1.5, 1.7, 1.12_
 - [ ] 4.2 `ios_acl.py`: standard + extended (numbered, named, sequence numbers, remark, established), interface bindings in/out, ip route, ACL classification by reference, vty access-class

@@ -99,6 +99,7 @@ class Rule(BaseModel):
     vendor_seq: int | None = None  # IOS named-ACL sequence number
     log: bool = False
     log_level: str = ""
+    source_line: int = 0  # 1-based line of the ACE in the (redacted) source; 0 if synthetic
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -199,6 +200,30 @@ class LineRecord(BaseModel):
     ]
     security_relevant: bool = False
     waiver_id: str = ""
+    reason: str = ""  # machine-readable reason for unparsed / out-of-scope / not-policy lines
+
+
+class UnparsedLine(BaseModel):
+    """A source line the parser could not migrate. Never dropped silently."""
+
+    line_no: int
+    text: str  # redacted text
+    reason: str  # machine-readable reason code, e.g. "non-contiguous-wildcard"
+    security_relevant: bool = True
+
+
+class ParseError(Exception):
+    """Fatal structural problem (group cycle, undefined group). Carries a line number."""
+
+    def __init__(self, code: str, message: str, line_no: int = 0) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.line_no = line_no
+
+    def __str__(self) -> str:
+        where = f" (line {self.line_no})" if self.line_no else ""
+        return f"{self.code}: {self.message}{where}"
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +305,10 @@ class Policy(BaseModel):
 
     mgmt_access: list[MgmtAccess] = Field(default_factory=list)
     line_records: list[LineRecord] = Field(default_factory=list)
+    unparsed: list[UnparsedLine] = Field(default_factory=list)
+
+    # IOS only: ACL name -> "policy" | "management-plane" | "non-policy" | "unused"
+    acl_classes: dict[str, str] = Field(default_factory=dict)
 
     # Global config flags
     same_security_inter: bool = False  # same-security-traffic permit inter-interface
