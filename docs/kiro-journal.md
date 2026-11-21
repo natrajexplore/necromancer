@@ -53,3 +53,9 @@
 - What Kiro did: Built PIX/ASA and IOS parsers, detection, line accounting, renderers with P1/P14, and golden-flow tests; fixed evaluator zone bugs and an SNMP redaction leak; pushed 447336a
 - What the human corrected: none
 - Kiro feature used: specs/steering/hooks/PBT
+
+## 2026-11-21 — CLI
+- Spec task(s): necro-engine/5.1, necro-engine/5.2
+- What Kiro did: Built the Autopsy engine (box-algebra shadowed/redundant plus nine other finding types, zone-trust severity), confirmed via decide(), 100% recall on seeded GHOST lines.
+- What the human corrected: Nothing this session; Kiro found and fixed an undefined-ACL fixture in its own test and flagged an evaluator same-security gap for a follow-up.
+- Kiro feature used: specs, hooks, steering, PBT
