@@ -1,9 +1,11 @@
-"""Task 4.6: hand-verified golden flows against decide(original) (requirement 2.7).
+"""Tasks 4.6 and 6.5: hand-verified golden flows against decide(original) and the resurrection.
 
 The vectors in samples/golden-flows/*.toml were worked out by hand from policy-semantics.md and are
 independent of evaluate.py. If a vector and the evaluator disagree, the evaluator is wrong until a
-human proves otherwise. This file runs the original-side check; the resurrected side (PAN-OS) joins
-it with the emitter tasks and honours ``expect_ledger`` / ``expect_panos_dst``.
+human proves otherwise. The original side runs ``decide`` on the parsed config. The resurrected
+side emits PAN-OS, reads the text back and runs ``decide`` on that, honouring ``expect_panos_dst``
+(the destination a PAN-OS rule matches) and ``expect_ledger`` (the flow must be covered by an
+exorcism-ledger entry of that class, and the result must be the entry's declared action).
 """
 
 from __future__ import annotations
@@ -16,9 +18,12 @@ from pathlib import Path
 import pytest
 
 from necro.contexts import build_contexts, find_context
+from necro.emitters import PanosEmission, emit_panos
 from necro.evaluate import decide
 from necro.ir import Action, AddressSpace, Dialect, Flow, Policy
+from necro.ledger import covering
 from necro.parsers import parse_config
+from necro.parsers.panos_reader import read_panos
 
 SAMPLES = Path(__file__).resolve().parents[2] / "samples"
 GOLDEN = SAMPLES / "golden-flows"
@@ -105,6 +110,57 @@ def test_golden_flow_original_side(vector: Vector) -> None:
     got = decide(policy, ctx, _flow(raw))
     expected = (raw["expect_action"], raw["expect_rule"], raw["expect_to_zone"])
     assert (got.action.value, got.rule_id, got.to_zone) == expected, f"{vector.id}: {raw['note']}"
+
+
+_RESURRECTED: dict[str, tuple[PanosEmission, Policy]] = {}
+
+# Where the resurrected rulebase has no rule of its own, the final deny stands in for these.
+_FINAL_DENY_FOR = {"implicit-deny", "same-security-deny"}
+
+
+def _resurrected(config: str) -> tuple[PanosEmission, Policy]:
+    if config not in _RESURRECTED:
+        emission = emit_panos(_policy(config))
+        _RESURRECTED[config] = (emission, read_panos(emission.text))
+    return _RESURRECTED[config]
+
+
+@pytest.mark.parametrize("vector", _vectors(), ids=lambda v: v.id)
+def test_golden_flow_resurrected_side(vector: Vector) -> None:
+    policy = _policy(vector.config)
+    emission, resurrected = _resurrected(vector.config)
+    raw = vector.raw
+    ctx = find_context(policy, str(raw["context"]))
+    flow = _flow(raw)
+    # A PAN-OS rule matches the pre-NAT destination: expect_panos_dst, when it differs.
+    panos_flow = flow
+    if "expect_panos_dst" in raw:
+        panos_flow = flow.model_copy(
+            update={"dst": ipaddress.IPv4Address(str(raw["expect_panos_dst"]))}
+        )
+    zone = emission.zones.of_context(policy, ctx)
+    got = decide(resurrected, find_context(resurrected, f"{zone}:in"), panos_flow)
+
+    entries = covering(emission.ledger, ctx.name, flow)
+    expect_ledger = raw.get("expect_ledger")
+    if expect_ledger is not None:
+        assert expect_ledger in {e.entry_class.value for e in entries}, (
+            f"{vector.id}: no {expect_ledger} ledger entry covers this flow"
+        )
+    declared = {e.new_action for e in entries}
+    assert len(declared) <= 1, f"{vector.id}: ledger entries disagree: {[e.id for e in entries]}"
+    expected_action = declared.pop() if declared else Action(str(raw["expect_action"]))
+    expected_zone = emission.zones.of_nameif(str(raw["expect_to_zone"]))
+    assert (got.action, got.to_zone) == (expected_action, expected_zone), (
+        f"{vector.id}: {raw['note']} -> {got}"
+    )
+    # Without a ledger entry the same source rule decides: names map back to the ACE.
+    if not entries:
+        expected_rule = str(raw["expect_rule"])
+        source = emission.rule_sources.get(got.rule_id, got.rule_id)
+        assert source == expected_rule or (
+            expected_rule in _FINAL_DENY_FOR and source == "implicit-deny"
+        ), f"{vector.id}: decided by {got.rule_id} ({source}), expected {expected_rule}"
 
 
 def test_every_supported_dialect_has_vectors() -> None:

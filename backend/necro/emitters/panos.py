@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from necro.contexts import build_contexts
-from necro.emitters.panos_env import BuildEnv
+from necro.emitters.panos_env import BuildEnv, RuleSpec
 from necro.emitters.panos_mgmt import plan_management, profile_lines, to_the_box_entries
 from necro.emitters.panos_names import NameRegistry
 from necro.emitters.panos_nat import nat_lines
@@ -19,7 +19,6 @@ from necro.emitters.panos_objects import ANY, ObjectTable, name_list, name_token
 from necro.emitters.panos_rules import (
     TAG_FINAL_DENY,
     TAG_IMPLICIT,
-    RuleSpec,
     context_specs,
     final_deny_spec,
 )
@@ -115,8 +114,13 @@ def emit_panos(policy: Policy) -> PanosEmission:
     names = NameRegistry()
     rule_lines: list[str] = []
     sources: dict[str, str] = {}
+    uses: dict[str, int] = {}
     for spec in specs:
-        name = names.name(spec.key)
+        # an ACL bound to several interfaces repeats its rule keys: later ones carry the zone
+        count = uses.get(spec.key, 0)
+        uses[spec.key] = count + 1
+        preferred = spec.key if count == 0 else f"{spec.key}-{spec.from_zone}"
+        name = names.name(f"{spec.key}|{count}", preferred)
         sources[name] = spec.source
         rule_lines += _rule_lines(name, spec, objects)
 

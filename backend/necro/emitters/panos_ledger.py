@@ -11,7 +11,8 @@ the interface management profile and covered by the ``to-the-box`` entries inste
 from __future__ import annotations
 
 from necro.boxes import Box, boxes_of, effective_regions, subtract_all
-from necro.ir import Action, LedgerClass, Rule
+from necro.emitters.panos_env import ANY_ZONE, RuleSpec
+from necro.ir import Action, LedgerClass, Match, Rule
 from necro.ledger import LedgerEntry, make_entry
 from necro.sets import AddrSet
 
@@ -148,47 +149,70 @@ def ip_protocol_entry(
     )
 
 
+def _spec_regions(
+    permitted: list[Box], spec: RuleSpec, space: dict[str, AddrSet], earlier: list[Box]
+) -> list[Box]:
+    """The flows ``spec`` decides, after every earlier rule, as boxes (permits are appended)."""
+    dst = spec.dst
+    if spec.to_zone != ANY_ZONE:
+        dst = dst.intersect(space.get(spec.to_zone, AddrSet()))
+    match = Match(
+        src=spec.src,
+        dst=dst,
+        proto=spec.proto,
+        src_ports=spec.sport,
+        dst_ports=spec.dport,
+        icmp_types=spec.icmp_types,
+    )
+    mine = boxes_of(match)
+    decided = subtract_all(list(mine), earlier)
+    earlier += mine
+    if spec.action == Action.permit:
+        permitted += decided
+    return decided
+
+
 def outbound_entries(
     context: str,
-    chain: list[Rule],
-    effective: dict[str, list[Box]],
+    specs: list[RuleSpec],
     egress: dict[str, list[Rule]],
-    zone_space: dict[str, AddrSet],
+    space: dict[str, AddrSet],
     device: AddrSet,
 ) -> list[LedgerEntry]:
     """``outbound-acl``: the candidate does not apply an outbound ACL, so it permits what it denied.
 
-    ``egress`` maps an egress interface to its outbound ACL, ``zone_space`` to the destinations
-    routed out of it. For each interface the entry covers the flows the ingress rules permit but
-    that ACL denies (first match deny, or no match). Intersecting the two rule sets is possible
-    but multiplies rules, so the candidate stays readable and the widening is put on record.
+    ``specs`` are the rules emitted for one context, in order. ``egress`` maps an egress zone to
+    its outbound ACL, ``space`` a zone to the destinations (as ACLs write them) that egress there.
+    For each zone the entry covers the flows the emitted rules permit but that ACL denies (first
+    match deny, or no match). Intersecting the two rule sets is possible but multiplies rules, so
+    the candidate stays readable and the widening is put on record.
     """
+    permitted: list[Box] = []
+    earlier: list[Box] = []
+    for spec in specs:
+        if not spec.disabled:
+            _spec_regions(permitted, spec, space, earlier)
+    permitted = without_addresses(permitted, device)
     entries: list[LedgerEntry] = []
-    for nameif, acl_rules in egress.items():
-        space = zone_space.get(nameif)
-        if space is None:
-            continue
+    for zone, acl_rules in egress.items():
         egress_permits = [
             box
             for rule, boxes in effective_regions(acl_rules)
             if rule.action == Action.permit
             for box in boxes
         ]
-        denied: list[Box] = []
-        for rule in chain:
-            if rule.inactive or rule.match.established or rule.action != Action.permit:
-                continue
-            routed = [
-                part
-                for box in without_addresses(effective.get(rule.id, []), device)
-                if (part := box.restrict(_ADDR, _dst(box).intersect(space))) is not None
-            ]
-            denied += subtract_all(routed, egress_permits)
+        routed = [
+            part
+            for box in permitted
+            if (part := box.restrict(_ADDR, _dst(box).intersect(space.get(zone, AddrSet()))))
+            is not None
+        ]
+        denied = subtract_all(routed, egress_permits)
         if denied:
             reason = (
-                f"Interface {nameif} has an outbound ACL. The candidate has no per-interface "
-                "outbound policy, so flows the ingress rules permit and that ACL denied are now "
-                "permitted. Tighten the rulebase or accept the widening."
+                f"Zone {zone} has an outbound ACL. The candidate has no per-interface outbound "
+                "policy, so flows the rules permit and that ACL denied are now permitted. "
+                "Tighten the rulebase or accept the widening."
             )
             entries.append(
                 make_entry(

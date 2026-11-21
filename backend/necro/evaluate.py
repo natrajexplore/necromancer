@@ -26,6 +26,7 @@ PBT P8: the evaluator never raises on any well-formed flow (total function).
 
 from __future__ import annotations
 
+from necro.evaluate_panos import decide_panos
 from necro.ir import (
     Action,
     AddressSpace,
@@ -175,7 +176,7 @@ def _egress_zone(policy: Policy, context: Context, flow: Flow, route_table: Rout
     already carries the real address.
     """
     dst = flow.dst
-    if policy.dialect in (Dialect.pix, Dialect.asa) and policy.address_space == AddressSpace.mapped:
+    if policy.dialect != Dialect.ios and policy.address_space == AddressSpace.mapped:
         dst = NatModel(policy).map_destination(context.interface, flow.dst, flow)
     return route_table.to_zone(dst)
 
@@ -183,6 +184,8 @@ def _egress_zone(policy: Policy, context: Context, flow: Flow, route_table: Rout
 def _decide_inner(
     policy: Policy, context: Context, flow: Flow, to_zone: str, route_table: RouteTable
 ) -> Decision:
+    if policy.dialect == Dialect.panos:
+        return decide_panos(policy, context, flow, to_zone, _flow_matches_rule)
     # On PIX/ASA, to-the-box traffic bypasses security ACLs (management-plane).
     # On IOS, inbound ACLs do filter to-self traffic, so we continue.
     if policy.dialect in (Dialect.pix, Dialect.asa) and to_zone == "self":

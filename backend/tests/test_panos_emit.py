@@ -6,6 +6,8 @@ through ``panos_reader`` and ``evaluate.decide`` (tasks 6.5, 8.x).
 
 from __future__ import annotations
 
+import ipaddress
+
 import pytest
 
 from necro.emitters import emit_panos
@@ -13,7 +15,7 @@ from necro.emitters.panos_names import ZONE_MAX_LEN, is_valid_name
 from necro.emitters.panos_objects import ObjectTable, name_list, name_token, port_spec
 from necro.parsers import parse_config
 from necro.sets import AddrSet, PortSet
-from tests.panos_helpers import RULE_PREFIX, policy_of, rules_of
+from tests.panos_helpers import RULE_PREFIX, address_set, policy_of, rules_of
 
 CONFIGS = ["pix-2006-hq.cfg", "asa-8.2-branch.cfg", "ios-12-edge.cfg"]
 _RULE_PREFIX = RULE_PREFIX
@@ -158,11 +160,11 @@ def test_acl_rules_keep_their_source_order_and_blocks_follow_interface_order() -
 def test_security_level_implicit_permits_become_tagged_allow_rules() -> None:
     rules = rules_of(emit_panos(policy_of("pix-2006-hq.cfg")).lines)
     implicit = {n: a for n, a in rules.items() if a["tag"] == '"necro:implicit"'}
-    # inside (100) may reach outside (0) and dmz (50), and destinations with no route.
+    # inside (100) may reach outside (0) and dmz (50). The PIX has a default route, so no
+    # destination is left without a zone and no ``to any`` rule is needed.
     assert {(a["from"], a["to"]) for a in implicit.values()} == {
         ("inside", "outside"),
         ("inside", "dmz"),
-        ("inside", "any"),
     }
     assert all(a["action"] == "allow" for a in implicit.values())
 
@@ -218,3 +220,18 @@ def test_emission_is_plain_set_commands() -> None:
         emission = emit_panos(policy_of(config))
         assert all(line.startswith("set ") for line in emission.lines)
         assert emission.text.endswith("\n") and not emission.text.endswith("\n\n")
+
+
+def test_implicit_permit_to_unrouted_space_must_not_match_the_real_zones() -> None:
+    """A ``to any`` rule matches every zone, so it only covers destinations no route gives."""
+    text = (
+        "interface E0\n nameif outside\n security-level 0\n ip address 192.0.2.1 255.255.255.0\n"
+        "interface E1\n nameif inside\n security-level 100\n ip address 10.1.0.1 255.255.255.0\n"
+    )
+    emission = emit_panos(parse_config(text))
+    rule = rules_of(emission.lines)["implicit-inside-to-any"]
+    dst = address_set(emission.lines, rule["destination"])
+    assert rule["to"] == "any" and dst != AddrSet.any()
+    assert dst.contains(ipaddress.IPv4Address("172.16.0.9"))
+    assert not dst.contains(ipaddress.IPv4Address("10.1.0.9"))  # inside: hairpin needs permission
+    assert not dst.contains(ipaddress.IPv4Address("192.0.2.9"))

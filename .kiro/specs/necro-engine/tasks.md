@@ -60,7 +60,7 @@
   - _Requirements: 4.3, 4.7, 4.9, 4.10_
 - [x] 6.4 Pre-8.3 address-space handling
   - _Requirements: 4.11_
-- [ ] 6.5 `panos_reader.py`: parse emitted `set` commands back into IR (used by the oracle)
+- [x] 6.5 `panos_reader.py`: parse emitted `set` commands back into IR (used by the oracle)
   - _Requirements: 6.1_
 - [ ] 6.6 Determinism test; PBT P11
   - _Requirements: 4.14_

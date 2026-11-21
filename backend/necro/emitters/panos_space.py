@@ -33,6 +33,31 @@ def _mapped_partition(env: BuildEnv, ingress: str, dst: AddrSet) -> list[tuple[s
     return parts + env.routes.partition(split.untouched)
 
 
+def _partition(env: BuildEnv, dst: AddrSet, ingress: str | None) -> list[tuple[str, AddrSet]]:
+    mapped = ingress is not None and env.policy.address_space == AddressSpace.mapped
+    if mapped and ingress is not None:
+        return _mapped_partition(env, ingress, dst)
+    return env.routes.partition(dst)
+
+
+def unrouted_space(env: BuildEnv, ingress: str | None) -> AddrSet:
+    """The destinations (as ACLs write them) whose egress zone no known route gives."""
+    unrouted = AddrSet()
+    for nameif, part in _partition(env, AddrSet.any(), ingress):
+        if nameif == ANY_ZONE:
+            unrouted = unrouted.union(part)
+    return unrouted
+
+
+def zone_space(env: BuildEnv, ingress: str | None) -> dict[str, AddrSet]:
+    """The destinations (as ACLs write them) that egress each zone; ``any`` is unrouted space."""
+    space: dict[str, AddrSet] = {}
+    for nameif, part in _partition(env, AddrSet.any(), ingress):
+        zone = env.zones.of_nameif(nameif)
+        space[zone] = space[zone].union(part) if zone in space else part
+    return space
+
+
 def zone_pieces(env: BuildEnv, dst: AddrSet, ingress: str | None) -> list[tuple[str, AddrSet]]:
     """Split a destination set by egress zone, in interface order, unrouted space last.
 
@@ -41,11 +66,7 @@ def zone_pieces(env: BuildEnv, dst: AddrSet, ingress: str | None) -> list[tuple[
     """
     if dst == AddrSet.any():
         return [(ANY_ZONE, dst)]
-    mapped = ingress is not None and env.policy.address_space == AddressSpace.mapped
-    if mapped and ingress is not None:
-        parts = _mapped_partition(env, ingress, dst)
-    else:
-        parts = env.routes.partition(dst)
+    parts = _partition(env, dst, ingress)
     merged: dict[str, AddrSet] = {}
     for nameif, part in parts:
         zone = env.zones.of_nameif(nameif)
@@ -62,6 +83,8 @@ def translated_pieces(
     Translated means the source is in the translation space's sources, or the destination is in
     its destinations; the two parts are disjoint. Without nat-control the match is unchanged.
     """
+    if src.is_empty() or dst.is_empty():
+        return []
     if not env.nat_control or ingress is None:
         return [(src, dst)]
     sources, destinations = env.nat.translation_space(ingress)

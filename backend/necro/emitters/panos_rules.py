@@ -12,10 +12,10 @@ routing table (``RouteTable.partition``), the same lookup ``decide()`` uses.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
 from necro.boxes import Box, effective_regions
-from necro.emitters.panos_env import ANY_ZONE, BuildEnv
+from necro.emitters.panos_env import ANY_ZONE, BuildEnv, RuleSpec
 from necro.emitters.panos_ledger import (
     established_entries,
     ip_protocol_entry,
@@ -24,8 +24,15 @@ from necro.emitters.panos_ledger import (
     zone_any_entry,
 )
 from necro.emitters.panos_objects import ip_protocol_app_name
-from necro.emitters.panos_space import restrict_translated, translated_pieces, zone_pieces
+from necro.emitters.panos_space import (
+    restrict_translated,
+    translated_pieces,
+    unrouted_space,
+    zone_pieces,
+    zone_space,
+)
 from necro.ir import Action, Context, Dialect, Policy, Rule
+from necro.ledger import LedgerEntry
 from necro.sets import AddrSet, PortSet
 
 TAG_IMPLICIT = "necro:implicit"
@@ -33,27 +40,6 @@ TAG_FINAL_DENY = "necro:final-deny"
 FINAL_DENY_KEY = "necro-final-deny"
 _DESCRIPTION_MAX = 1023
 ICMP_PROTOCOL = 1
-
-
-@dataclass(frozen=True)
-class RuleSpec:
-    """One PAN-OS security rule, before names are allocated and objects are created."""
-
-    key: str  # unique per rule: drives the PAN-OS rule name
-    source: str  # source rule id (``acl#seq``) or an implicit rule id
-    from_zone: str
-    to_zone: str
-    src: AddrSet
-    dst: AddrSet
-    proto: int | None
-    sport: PortSet
-    dport: PortSet
-    icmp_types: frozenset[int] | None
-    action: Action
-    disabled: bool = False
-    remark: str = ""
-    tags: tuple[str, ...] = ()
-    log_start: bool = False
 
 
 def _seq(rule: Rule) -> int:
@@ -65,7 +51,16 @@ def _chain(policy: Policy, ctx: Context) -> list[tuple[str, Rule]]:
     acls = [ctx.acl_name] if ctx.acl_name else []
     if policy.dialect != Dialect.ios and ctx.global_acl_name:
         acls.append(ctx.global_acl_name)
-    return [(acl, rule) for acl in acls for rule in policy.acls.get(acl, [])]
+    # An ACL repeated in one chain (bound per interface and globally) can never be the first match
+    # the second time, so only its first occurrence matters.
+    chain: list[tuple[str, Rule]] = []
+    seen: set[str] = set()
+    for acl in acls:
+        for rule in policy.acls.get(acl, []):
+            if rule.id not in seen:
+                seen.add(rule.id)
+                chain.append((acl, rule))
+    return chain
 
 
 def _rule_specs(
@@ -138,16 +133,6 @@ def _rule_specs(
     return specs
 
 
-def _egress_rules(policy: Policy) -> dict[str, list[Rule]]:
-    """Outbound ACL rules by egress interface (nameif)."""
-    return {nameif: policy.acls.get(acl, []) for nameif, acl in policy.egress_acls.items()}
-
-
-def _zone_space(env: BuildEnv) -> dict[str, AddrSet]:
-    """The destinations routed out of each interface (nameif)."""
-    return dict(env.routes.partition(AddrSet.any()))
-
-
 def chain_specs(env: BuildEnv, ctx: Context, from_zone: str) -> list[RuleSpec]:
     """ACL rules of a context in order; omitted ACEs become ledger entries."""
     chain = _chain(env.policy, ctx)
@@ -160,9 +145,6 @@ def chain_specs(env: BuildEnv, ctx: Context, from_zone: str) -> list[RuleSpec]:
     for acl, rule in chain:
         specs += _rule_specs(env, ctx, acl, rule, from_zone, effective)
     env.ledger += established_entries(ctx.name, rules, effective, env.device)
-    env.ledger += outbound_entries(
-        ctx.name, rules, effective, _egress_rules(env.policy), _zone_space(env), env.device
-    )
     return specs
 
 
@@ -209,11 +191,24 @@ def security_level_specs(env: BuildEnv, from_zone: str, ctx: Context) -> list[Ru
         base = _implicit(
             f"implicit-{from_zone}-to-{zone}", "implicit-security-level", from_zone, zone
         )
-        parts = translated_pieces(env, ctx.interface, AddrSet.any(), AddrSet.any())
+        # ``to any`` would also match every real zone, so it is limited to unrouted destinations
+        wanted = unrouted_space(env, ctx.interface) if zone == ANY_ZONE else AddrSet.any()
+        parts = translated_pieces(env, ctx.interface, AddrSet.any(), wanted)
         for part, (src, dst) in enumerate(parts, start=1):
             suffix = f"-n{part}" if len(parts) > 1 else ""
             specs.append(replace(base, key=base.key + suffix, src=src, dst=dst))
     return specs
+
+
+def _outbound(env: BuildEnv, ctx: Context, specs: list[RuleSpec]) -> list[LedgerEntry]:
+    """``outbound-acl`` entries for the rules emitted on ``ctx``."""
+    policy = env.policy
+    egress = {
+        env.zones.of_nameif(nameif): policy.acls.get(acl, [])
+        for nameif, acl in policy.egress_acls.items()
+    }
+    space = zone_space(env, env.ingress(ctx))
+    return outbound_entries(ctx.name, specs, egress, space, env.device)
 
 
 def context_specs(env: BuildEnv, ctx: Context) -> list[RuleSpec]:
@@ -222,10 +217,12 @@ def context_specs(env: BuildEnv, ctx: Context) -> list[RuleSpec]:
     from_zone = env.zones.of_context(policy, ctx)
     if policy.dialect == Dialect.ios and not ctx.acl_name:
         key = f"implicit-{from_zone}-to-any"
-        return [_implicit(key, "implicit-permit-no-acl", from_zone, ANY_ZONE)]
-    specs = chain_specs(env, ctx, from_zone)
-    if policy.dialect != Dialect.ios and not ctx.acl_name and not ctx.global_acl_name:
-        specs += security_level_specs(env, from_zone, ctx)
+        specs = [_implicit(key, "implicit-permit-no-acl", from_zone, ANY_ZONE)]
+    else:
+        specs = chain_specs(env, ctx, from_zone)
+        if policy.dialect != Dialect.ios and not ctx.acl_name and not ctx.global_acl_name:
+            specs += security_level_specs(env, from_zone, ctx)
+    env.ledger += _outbound(env, ctx, specs)
     return specs
 
 

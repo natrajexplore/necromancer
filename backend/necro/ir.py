@@ -43,6 +43,7 @@ class Dialect(StrEnum):
     pix = "pix"
     asa = "asa"
     ios = "ios"
+    panos = "panos"  # a candidate read back from emitted PAN-OS set commands
 
 
 class NatType(StrEnum):
@@ -100,6 +101,9 @@ class Rule(BaseModel):
     log: bool = False
     log_level: str = ""
     source_line: int = 0  # 1-based line of the ACE in the (redacted) source; 0 if synthetic
+    # PAN-OS rules only: the zones a rule applies to (empty = any zone)
+    from_zones: tuple[str, ...] = ()
+    to_zones: tuple[str, ...] = ()
 
     model_config = {"arbitrary_types_allowed": True}
 
