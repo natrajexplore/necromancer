@@ -509,11 +509,16 @@ def test_inspection_vpn_and_block_children_are_accounted() -> None:
     assert by_line[n0 + 7].reason == "unrecognized-command"
     assert by_line[n0 + 8].classification == "unparsed" and by_line[n0 + 8].security_relevant
     assert by_line[n0 + 9].reason == "unrecognized-command"
-    assert by_line[n0 + 11].reason == "orphan-indented-line"
+    assert by_line[n0 + 11].reason == "unrecognized-command"  # a comment does not end a block
     assert by_line[n0 + 13].classification == "not-policy"
     assert [r.metric for r in p.routes] == [5]
     assert _reasons(p).count("route-unknown-interface") == 1
     assert "tunneled-route" in _reasons(p) and "route-option-unsupported" in _reasons(p)
+
+
+def test_orphan_indented_line_is_unparsed() -> None:
+    p = _asa(" lonely\n")
+    assert _reasons(p) == ["orphan-indented-line"]
 
 
 def test_interface_edge_cases() -> None:

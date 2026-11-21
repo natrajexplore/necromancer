@@ -218,6 +218,8 @@ class _Parser:
             group = self.groups.lookup(name, (KIND_ICMP,), self.line_no)
             self.i += 2
             return frozenset(group.icmp)
+        if is_port_operator(tok):
+            raise Unsupported("port-operator-on-non-tcp-udp")
         self.i += 1
         icmp_type = parse_icmp_type(tok)
         if self.i < len(self.t) and self.t[self.i].isdigit():

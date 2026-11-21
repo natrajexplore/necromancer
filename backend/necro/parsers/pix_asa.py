@@ -175,8 +175,6 @@ class _PixAsaParser:
     def _walk_line(self, n: int, line: str) -> None:
         if is_comment_or_blank(line):
             self.ledger.mark(n, "not-policy")
-            if line.strip().startswith("!") and not is_indented(line):
-                self.block = None
             return
         tokens = line.split()
         if is_indented(line):

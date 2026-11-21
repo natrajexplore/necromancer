@@ -109,6 +109,10 @@ class LineLedger:
     def is_marked(self, line_no: int) -> bool:
         return line_no in self._records
 
+    def record(self, line_no: int) -> LineRecord | None:
+        """The current classification of a line, or None if it has not been classified yet."""
+        return self._records.get(line_no)
+
     def mark(
         self,
         line_no: int,
