@@ -10,20 +10,22 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from necro.contexts import build_contexts
+from necro.emitters.panos_env import BuildEnv
 from necro.emitters.panos_mgmt import plan_management, profile_lines, to_the_box_entries
 from necro.emitters.panos_names import NameRegistry
+from necro.emitters.panos_nat import nat_lines
 from necro.emitters.panos_network import ZoneMap, device_addresses, network_lines
 from necro.emitters.panos_objects import ANY, ObjectTable, name_list, name_token
 from necro.emitters.panos_rules import (
     TAG_FINAL_DENY,
     TAG_IMPLICIT,
-    BuildEnv,
     RuleSpec,
     context_specs,
     final_deny_spec,
 )
-from necro.ir import Action, Policy
+from necro.ir import Action, Dialect, Policy
 from necro.ledger import LedgerEntry, number_entries
+from necro.nat import NatModel
 from necro.zones import build_route_table
 
 _LOG_END = "log-end yes"
@@ -41,6 +43,7 @@ class PanosEmission:
     zones: ZoneMap
     rule_sources: dict[str, str] = field(default_factory=dict)  # PAN-OS rule name -> source rule id
     unsupported: list[str] = field(default_factory=list)  # not expressed; blocks the verdict
+    notes: list[str] = field(default_factory=list)  # differences that change no decision
     ledger: list[LedgerEntry] = field(default_factory=list)  # expressed lossily, on the record
 
     @property
@@ -93,7 +96,14 @@ def _rule_lines(name: str, spec: RuleSpec, objects: ObjectTable) -> list[str]:
 def emit_panos(policy: Policy) -> PanosEmission:
     """Emit the PAN-OS candidate config for ``policy``."""
     zones = ZoneMap.build(policy)
-    env = BuildEnv(policy, zones, build_route_table(policy), device_addresses(policy), [])
+    env = BuildEnv(
+        policy,
+        zones,
+        build_route_table(policy),
+        device_addresses(policy),
+        NatModel(policy),
+        nat_control=policy.dialect == Dialect.pix or policy.nat_control,
+    )
     specs: list[RuleSpec] = []
     for ctx in build_contexts(policy):
         specs += context_specs(env, ctx)
@@ -110,6 +120,7 @@ def emit_panos(policy: Policy) -> PanosEmission:
         sources[name] = spec.source
         rule_lines += _rule_lines(name, spec, objects)
 
+    nat = nat_lines(env, objects)
     lines = [
         *network_lines(policy, zones),
         *_tag_lines(specs),
@@ -118,6 +129,9 @@ def emit_panos(policy: Policy) -> PanosEmission:
         *objects.service_lines(),
         *objects.application_lines(),
         *profile_lines(env, plan),
+        *nat,
         *rule_lines,
     ]
-    return PanosEmission(lines, zones, sources, env.unsupported, number_entries(env.ledger))
+    return PanosEmission(
+        lines, zones, sources, env.unsupported, env.notes, number_entries(env.ledger)
+    )

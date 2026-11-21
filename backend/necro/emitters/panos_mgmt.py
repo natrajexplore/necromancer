@@ -17,10 +17,10 @@ import ipaddress
 
 from necro.boxes import Box, boxes_of, effective_regions, subtract_all
 from necro.contexts import build_contexts
+from necro.emitters.panos_env import BuildEnv
 from necro.emitters.panos_names import NameRegistry
 from necro.emitters.panos_network import device_addresses
 from necro.emitters.panos_objects import name_list
-from necro.emitters.panos_rules import BuildEnv
 from necro.ir import Action, Context, Dialect, LedgerClass, Match, Policy
 from necro.ledger import LedgerEntry, make_entry
 from necro.mgmt import SERVICE_NAMES, access_services, service_box

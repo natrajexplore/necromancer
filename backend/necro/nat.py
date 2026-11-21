@@ -26,8 +26,20 @@ needed by task 3.3.
 from __future__ import annotations
 
 import ipaddress
+from dataclasses import dataclass, field
 
 from necro.ir import Flow, NatType, Policy
+from necro.sets import AddrSet
+
+
+@dataclass
+class MappedSplit:
+    """How the static NAT rules of one ingress interface treat a set of ACL destinations."""
+
+    # (mapped addresses, the real addresses they translate to, real minus mapped as an integer)
+    translated: list[tuple[AddrSet, AddrSet, int]] = field(default_factory=list)
+    port_dependent: AddrSet = field(default_factory=AddrSet)
+    untouched: AddrSet = field(default_factory=AddrSet)
 
 
 class NatModel:
@@ -36,46 +48,66 @@ class NatModel:
     def __init__(self, policy: Policy) -> None:
         self._nat_rules = policy.nat_rules
 
+    def translation_space(self, ingress_interface: str) -> tuple[AddrSet, AddrSet]:
+        """The sources and the destinations that have a translation for flows entering here.
+
+        A flow is translated when its source is in the first set or its destination is in the
+        second. ``translates`` is exactly that test, and the PAN-OS emitter uses the same two
+        sets to reproduce nat-control (a rule may only permit what the source device translates):
+
+          - nat 0 exemptions and dynamic/PAT rules on this (real) interface: their real addresses.
+          - static rules: the mapped addresses when this is the mapped interface, and the real
+            addresses when this is the real interface (the reverse direction).
+        """
+        sources = AddrSet()
+        destinations = AddrSet()
+        for rule in self._nat_rules:
+            if rule.nat_type == NatType.static:
+                if rule.mapped_interface == ingress_interface:
+                    destinations = destinations.union(rule.mapped_addr)
+                if rule.real_interface == ingress_interface:
+                    destinations = destinations.union(rule.real_addr)
+            elif (
+                rule.nat_type in (NatType.nat0, NatType.dynamic, NatType.pat)
+                and rule.real_interface == ingress_interface
+            ):
+                sources = sources.union(rule.real_addr)
+        return sources, destinations
+
     def translates(self, ingress_interface: str, flow: Flow) -> bool:
         """Return True if the flow has a matching NAT translation.
 
         Called by evaluate.py when nat-control is active.
-
-        A flow is considered translated when:
-          - A nat0 exemption rule covers the source (no translation needed).
-          - A static rule maps the destination address (ingress on mapped_if).
-          - A nat/global pair covers the source (ingress on real_if).
         """
-        src_int = int(flow.src)
-        dst_int = int(flow.dst)
+        sources, destinations = self.translation_space(ingress_interface)
+        return sources.contains(flow.src) or destinations.contains(flow.dst)
 
+    def split_mapped(self, ingress_interface: str, addresses: AddrSet) -> MappedSplit:
+        """Split ACL destination addresses by how ``map_destination`` treats them.
+
+        Static rules are tried in order, like ``map_destination``. Addresses hit by a plain
+        static are paired with the real addresses they translate to. Addresses hit by a port
+        static depend on the flow's protocol and port, so no single real address applies.
+        """
+        split = MappedSplit()
+        remaining = addresses
         for rule in self._nat_rules:
-            if rule.nat_type == NatType.nat0:
-                # nat exemption: source on the real interface
-                if rule.real_interface == ingress_interface and rule.real_addr.contains(src_int):
-                    return True
-
-            elif rule.nat_type == NatType.static:
-                # Inbound static: mapped interface match
-                mapped_hit = (
-                    rule.mapped_interface == ingress_interface
-                    and rule.mapped_addr.contains(dst_int)
-                )
-                if mapped_hit:
-                    return True
-                # Outbound static (reverse direction)
-                if rule.real_interface == ingress_interface and rule.real_addr.contains(dst_int):
-                    return True
-
-            elif (
-                rule.nat_type in (NatType.dynamic, NatType.pat)
-                and rule.real_interface == ingress_interface
-                and rule.real_addr.contains(src_int)
-            ):
-                # Dynamic NAT/PAT: source on the real interface
-                return True
-
-        return False
+            if rule.nat_type != NatType.static or rule.mapped_interface != ingress_interface:
+                continue
+            hit = remaining.intersect(rule.mapped_addr)
+            real_nets = rule.real_addr.to_networks()
+            mapped_nets = rule.mapped_addr.to_networks()
+            if hit.is_empty() or not real_nets or not mapped_nets:
+                continue
+            remaining = remaining.subtract(hit)
+            if rule.proto is not None:
+                split.port_dependent = split.port_dependent.union(hit)
+                continue
+            offset = int(real_nets[0].network_address) - int(mapped_nets[0].network_address)
+            real = AddrSet([(iv.lo + offset, iv.hi + offset) for iv in hit.intervals])
+            split.translated.append((hit, real, offset))
+        split.untouched = remaining
+        return split
 
     def map_destination(
         self,

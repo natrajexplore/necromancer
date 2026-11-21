@@ -12,9 +12,10 @@ routing table (``RouteTable.partition``), the same lookup ``decide()`` uses.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace
 
 from necro.boxes import Box, effective_regions
+from necro.emitters.panos_env import ANY_ZONE, BuildEnv
 from necro.emitters.panos_ledger import (
     established_entries,
     ip_protocol_entry,
@@ -22,17 +23,14 @@ from necro.emitters.panos_ledger import (
     time_range_entry,
     zone_any_entry,
 )
-from necro.emitters.panos_network import ZoneMap
 from necro.emitters.panos_objects import ip_protocol_app_name
+from necro.emitters.panos_space import restrict_translated, translated_pieces, zone_pieces
 from necro.ir import Action, Context, Dialect, Policy, Rule
-from necro.ledger import LedgerEntry
 from necro.sets import AddrSet, PortSet
-from necro.zones import RouteTable
 
 TAG_IMPLICIT = "necro:implicit"
 TAG_FINAL_DENY = "necro:final-deny"
 FINAL_DENY_KEY = "necro-final-deny"
-ANY_ZONE = "any"
 _DESCRIPTION_MAX = 1023
 ICMP_PROTOCOL = 1
 
@@ -58,32 +56,8 @@ class RuleSpec:
     log_start: bool = False
 
 
-@dataclass
-class BuildEnv:
-    """What building needs: the source policy, zone names, routes, and what could not be said."""
-
-    policy: Policy
-    zones: ZoneMap
-    routes: RouteTable
-    device: AddrSet  # every address the device owns
-    unsupported: list[str]  # not expressed at all (blocks the verdict until resolved)
-    ledger: list[LedgerEntry] = field(default_factory=list)  # expressed lossily, on the record
-
-
 def _seq(rule: Rule) -> int:
     return int(rule.id.rsplit("#", 1)[1])
-
-
-def zone_pieces(env: BuildEnv, dst: AddrSet) -> list[tuple[str, AddrSet]]:
-    """Split a destination set by egress zone, in interface order, unrouted space last.
-
-    A destination of ``any`` spans every zone, so it stays one piece with the zone ``any``.
-    """
-    if dst == AddrSet.any():
-        return [(ANY_ZONE, dst)]
-    order = {zone: index for index, zone in enumerate(env.zones.order)}
-    pieces = [(env.zones.of_nameif(nameif), part) for nameif, part in env.routes.partition(dst)]
-    return sorted(pieces, key=lambda piece: order.get(piece[0], len(order)))
 
 
 def _chain(policy: Policy, ctx: Context) -> list[tuple[str, Rule]]:
@@ -118,32 +92,49 @@ def _rule_specs(
         entry = time_range_entry(ctx.name, rule, effective, env.device)
         if entry is not None:
             env.ledger.append(entry)
+    ingress = env.ingress(ctx)
     base = f"{acl}-{_seq(rule)}"
-    pieces = zone_pieces(env, m.dst)
-    specs: list[RuleSpec] = []
-    for index, (to_zone, dst) in enumerate(pieces, start=1):
-        if to_zone == ANY_ZONE and m.dst != AddrSet.any() and not rule.inactive:
-            entry = zone_any_entry(ctx.name, rule, effective, dst, env.device)
-            if entry is not None:
-                env.ledger.append(entry)
-        specs.append(
-            RuleSpec(
-                key=base if len(pieces) == 1 else f"{base}-z{index}",
-                source=rule.id,
-                from_zone=from_zone,
-                to_zone=to_zone,
-                src=m.src,
-                dst=dst,
-                proto=m.proto,
-                sport=m.src_ports,
-                dport=m.dst_ports,
-                icmp_types=m.icmp_types,
-                action=rule.action,
-                disabled=rule.inactive,
-                remark=rule.remark[:_DESCRIPTION_MAX],
-                tags=(f"src-acl:{acl}",),
-            )
+    narrowed = (
+        translated_pieces(env, ingress, m.src, m.dst)
+        if rule.action == Action.permit
+        else [(m.src, m.dst)]
+    )
+    if not narrowed:
+        env.notes.append(
+            f"{rule.id}: every flow it permits lacks a translation, so nat-control already "
+            "denied them; no PAN-OS rule is needed"
         )
+    specs: list[RuleSpec] = []
+    unrouted = AddrSet()
+    for part, (src, wanted) in enumerate(narrowed, start=1):
+        pieces = zone_pieces(env, wanted, ingress)
+        for index, (to_zone, dst) in enumerate(pieces, start=1):
+            if to_zone == ANY_ZONE and wanted != AddrSet.any():
+                unrouted = unrouted.union(dst)
+            key = base + (f"-n{part}" if len(narrowed) > 1 else "")
+            key += f"-z{index}" if len(pieces) > 1 else ""
+            specs.append(
+                RuleSpec(
+                    key=key,
+                    source=rule.id,
+                    from_zone=from_zone,
+                    to_zone=to_zone,
+                    src=src,
+                    dst=dst,
+                    proto=m.proto,
+                    sport=m.src_ports,
+                    dport=m.dst_ports,
+                    icmp_types=m.icmp_types,
+                    action=rule.action,
+                    disabled=rule.inactive,
+                    remark=rule.remark[:_DESCRIPTION_MAX],
+                    tags=(f"src-acl:{acl}",),
+                )
+            )
+    if not unrouted.is_empty() and not rule.inactive:
+        entry = zone_any_entry(ctx.name, rule, effective, unrouted, env.device)
+        if entry is not None:
+            env.ledger.append(entry)
     return specs
 
 
@@ -162,6 +153,9 @@ def chain_specs(env: BuildEnv, ctx: Context, from_zone: str) -> list[RuleSpec]:
     chain = _chain(env.policy, ctx)
     rules = [rule for _, rule in chain]
     effective = {rule.id: boxes for rule, boxes in effective_regions(rules)}
+    for rule in rules:
+        if rule.action == Action.permit and rule.id in effective:
+            effective[rule.id] = restrict_translated(env, env.ingress(ctx), effective[rule.id])
     specs: list[RuleSpec] = []
     for acl, rule in chain:
         specs += _rule_specs(env, ctx, acl, rule, from_zone, effective)
@@ -210,9 +204,15 @@ def security_level_specs(env: BuildEnv, from_zone: str, ctx: Context) -> list[Ru
             allowed = src_level > dst_level or (
                 src_level == dst_level and policy.same_security_inter
             )
-        if allowed:
-            key = f"implicit-{from_zone}-to-{zone}"
-            specs.append(_implicit(key, "implicit-security-level", from_zone, zone))
+        if not allowed:
+            continue
+        base = _implicit(
+            f"implicit-{from_zone}-to-{zone}", "implicit-security-level", from_zone, zone
+        )
+        parts = translated_pieces(env, ctx.interface, AddrSet.any(), AddrSet.any())
+        for part, (src, dst) in enumerate(parts, start=1):
+            suffix = f"-n{part}" if len(parts) > 1 else ""
+            specs.append(replace(base, key=base.key + suffix, src=src, dst=dst))
     return specs
 
 
