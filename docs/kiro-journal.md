@@ -41,3 +41,15 @@
 - What Kiro did: Ran pytest -q -m pbt; 18 PBT tests (P7, P8, P9, P10) passed in 5.7 s at dev profile
 - What the human corrected: none
 - Kiro feature used: PBT/hooks
+
+## 2026-11-21 — CLI
+- Spec task(s): necro-engine/3.2
+- What Kiro did: Fixed egress ACL semantics in evaluate.py (implicit deny, Policy.egress_acls by to_zone, no swallowed errors), added tests, pushed ddc0999
+- What the human corrected: none
+- Kiro feature used: PBT/hooks
+
+## 2026-11-21 — CLI
+- Spec task(s): necro-engine/4.1, 4.2, 4.3, 4.4, 4.5, 4.6 (plus fix to 2.5)
+- What Kiro did: Built PIX/ASA and IOS parsers, detection, line accounting, renderers with P1/P14, and golden-flow tests; fixed evaluator zone bugs and an SNMP redaction leak; pushed 447336a
+- What the human corrected: none
+- Kiro feature used: specs/steering/hooks/PBT
