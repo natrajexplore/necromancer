@@ -28,7 +28,7 @@
 - [x] 3.3 `nat.py`: pre-8.3 `static`/`nat`/`global` model + `translates()` for nat-control
   - _Requirements: 2.4, 4.11_
 
-- [ ] 4. Parsers
+- [x] 4. Parsers
 - [x] 4.1 `pix_asa.py`: names, interfaces/nameif/security-level, routes, object-groups (+ nested, cycle and undefined detection), extended ACLs (remark/log/inactive/time-range), access-group in/out, same-security-traffic, nat-control, static/nat/global, telnet/ssh/http mgmt
   - Fixtures: `pix-2006-hq.cfg`, `asa-8.2-branch.cfg`, `broken-configs/asa-*.cfg`
   - _Requirements: 1.1, 1.4, 1.5, 1.7, 1.12_
@@ -41,7 +41,7 @@
   - _Requirements: 1.9_
 - [x] 4.5 Renderer per dialect (IR → text) and PBT P1 round-trip
   - _Requirements: 1.8_
-- [ ] 4.6 `tests/test_golden_flows.py` for PIX, ASA 8.2 and IOS vectors (original side)
+- [x] 4.6 `tests/test_golden_flows.py` for PIX, ASA 8.2 and IOS vectors (original side)
   - _Requirements: 2.7_
 
 - [ ] 5. Autopsy

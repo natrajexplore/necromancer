@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from necro.ir import (
     Action,
+    AddressSpace,
     Context,
     Decision,
     Dialect,
@@ -156,13 +157,32 @@ def decide(policy: Policy, context: Context, flow: Flow) -> Decision:
     Total over well-formed flows (P8) by construction, not by catching errors:
     an unexpected exception is a bug and must surface.
     """
-    return _decide_inner(policy, context, flow)
-
-
-def _decide_inner(policy: Policy, context: Context, flow: Flow) -> Decision:
     route_table = build_route_table(policy)
-    to_zone = route_table.to_zone(flow.dst)
+    to_zone = _egress_zone(policy, context, flow, route_table)
+    decision = _decide_inner(policy, context, flow, to_zone, route_table)
+    # Every decision reports the egress zone from the route lookup, denies included
+    # (policy-semantics section 7 compares to_zone for every flow; golden-flows README).
+    if decision.to_zone != to_zone:
+        decision = decision.model_copy(update={"to_zone": to_zone})
+    return decision
 
+
+def _egress_zone(policy: Policy, context: Context, flow: Flow, route_table: RouteTable) -> str:
+    """Zone of the longest-prefix match on the *real* destination (policy-semantics 1.5, 5).
+
+    Pre-8.3 ACLs are written in mapped addresses, so a flow arriving on a static's mapped
+    interface is looked up by the real address it translates to. For ASA 8.3+ and IOS the flow
+    already carries the real address.
+    """
+    dst = flow.dst
+    if policy.dialect in (Dialect.pix, Dialect.asa) and policy.address_space == AddressSpace.mapped:
+        dst = NatModel(policy).map_destination(context.interface, flow.dst, flow)
+    return route_table.to_zone(dst)
+
+
+def _decide_inner(
+    policy: Policy, context: Context, flow: Flow, to_zone: str, route_table: RouteTable
+) -> Decision:
     # On PIX/ASA, to-the-box traffic bypasses security ACLs (management-plane).
     # On IOS, inbound ACLs do filter to-self traffic, so we continue.
     if policy.dialect in (Dialect.pix, Dialect.asa) and to_zone == "self":
@@ -184,19 +204,18 @@ def _decide_ios(policy: Policy, context: Context, flow: Flow, to_zone: str) -> D
     acl_name = context.acl_name
 
     if not acl_name:
-        return Decision(
-            action=Action.permit,
-            rule_id="implicit-permit-no-acl",
-            to_zone=to_zone,
-        )
+        permit = Decision(action=Action.permit, rule_id="implicit-permit-no-acl", to_zone=to_zone)
+        return _apply_egress_acl(policy, context, flow, to_zone, permit)
 
     rules = policy.acls.get(acl_name, [])
     result = _eval_acl(rules, flow)
     if result is not None:
-        result.to_zone = to_zone if result.action == Action.permit else ""
+        result.to_zone = to_zone
+        if result.action == Action.permit:
+            return _apply_egress_acl(policy, context, flow, to_zone, result)
         return result
 
-    return Decision(action=Action.deny, rule_id="implicit-deny", to_zone="")
+    return Decision(action=Action.deny, rule_id="implicit-deny", to_zone=to_zone)
 
 
 def _decide_pix_asa(

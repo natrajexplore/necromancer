@@ -81,10 +81,12 @@ class NatModel:
         self,
         ingress_interface: str,
         dst: ipaddress.IPv4Address,
+        flow: Flow | None = None,
     ) -> ipaddress.IPv4Address:
         """Return the real destination for a mapped destination address.
 
-        Pre-8.3: static rule maps mapped_addr -> real_addr.
+        Pre-8.3: static rule maps mapped_addr -> real_addr. When ``flow`` is given, a port
+        static (``static ... tcp|udp``) only applies to a flow of that protocol and mapped port.
         Returns dst unchanged if no matching static rule exists.
         """
         dst_int = int(dst)
@@ -94,6 +96,13 @@ class NatModel:
             if rule.mapped_interface != ingress_interface:
                 continue
             if not rule.mapped_addr.contains(dst_int):
+                continue
+            port_static_miss = (
+                flow is not None
+                and rule.proto is not None
+                and (flow.proto != rule.proto or not rule.mapped_ports.contains(flow.dst_port))
+            )
+            if port_static_miss:
                 continue
             real_nets = rule.real_addr.to_networks()
             mapped_nets = rule.mapped_addr.to_networks()
