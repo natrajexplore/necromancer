@@ -51,7 +51,7 @@
   - Test: seeded-ghost recall = 100% on every sample (`test_autopsy_recall.py`)
   - _Requirements: 3.3, 3.4, 3.5, 3.6, 3.8, 3.9, 3.10, 3.13, 3.14_
 
-- [ ] 6. PAN-OS emitter + reader
+- [x] 6. PAN-OS emitter + reader
 - [x] 6.1 Zones, objects, groups, services (neq → two ranges), rules in order, implicit-permit rules, explicit final deny; `panos_names.py`; PBT P12
   - _Requirements: 4.1, 4.2, 4.4, 4.6, 4.8_
 - [x] 6.2 To-zone per rule with splitting
@@ -62,7 +62,7 @@
   - _Requirements: 4.11_
 - [x] 6.5 `panos_reader.py`: parse emitted `set` commands back into IR (used by the oracle)
   - _Requirements: 6.1_
-- [ ] 6.6 Determinism test; PBT P11
+- [x] 6.6 Determinism test; PBT P11
   - _Requirements: 4.14_
 
 - [ ] 7. Tightening + exorcism ledger
