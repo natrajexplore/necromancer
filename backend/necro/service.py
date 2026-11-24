@@ -8,14 +8,20 @@ examples per request). Nothing here reads files, opens sockets or logs config li
 from __future__ import annotations
 
 import threading
+import tomllib
 from collections import Counter
-from collections.abc import Callable, Sequence
-from typing import Literal, NoReturn
+from collections.abc import Callable, Mapping, Sequence
+from datetime import date, datetime
+from typing import Literal
 
+from necro import report
+from necro.assessment import Assessment, assemble, compute_core
+from necro.audit import DEFAULT_INPUT_NAME, sha256_text, utc_now
 from necro.autopsy import analyze
-from necro.coverage import compute_coverage
+from necro.coverage import Coverage, compute_coverage
 from necro.emitters import emit_panos
-from necro.golden import GoldenVector
+from necro.gate_models import Sidecar
+from necro.golden import GoldenVector, parse_golden
 from necro.ir import Dialect, ParseError, Policy
 from necro.oracle import (
     DEFAULT_SEED,
@@ -30,6 +36,8 @@ from necro.schemas import (
     AutopsyResult,
     CoverageSummary,
     ExhumeResult,
+    GateResponse,
+    GrimoireResponse,
     InterfaceSummary,
     LineIssue,
     ProveResult,
@@ -38,8 +46,9 @@ from necro.schemas import (
 
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024
 PARSE_TIMEOUT_S = 10.0
+DEFAULT_GATE_PROFILE = "ci"  # a GO verdict needs the ci budget (governance rule R3)
 
-ErrorKind = Literal["input", "too-large", "timeout", "not-implemented"]
+ErrorKind = Literal["input", "too-large", "timeout"]
 
 
 class NecroError(Exception):
@@ -123,6 +132,18 @@ def _blocking(policy: Policy) -> list[LineIssue]:
     return [i for i in _issues(policy) if i.security_relevant and not i.waived]
 
 
+def _coverage_summary(cov: Coverage) -> CoverageSummary:
+    return CoverageSummary(
+        total_lines=cov.total_lines,
+        counts=cov.counts,
+        security_relevant=cov.security_relevant,
+        handled=cov.handled,
+        waived=cov.waived,
+        blocking=cov.blocking,
+        ratio=cov.ratio,
+    )
+
+
 def exhume(text: str, dialect: str | None = None) -> ExhumeResult:
     policy = load(text, dialect)
     cov = compute_coverage(policy)
@@ -148,15 +169,7 @@ def exhume(text: str, dialect: str | None = None) -> ExhumeResult:
         ],
         bindings=len(policy.bindings),
         nat_rules=len(policy.nat_rules),
-        coverage=CoverageSummary(
-            total_lines=cov.total_lines,
-            counts=cov.counts,
-            security_relevant=cov.security_relevant,
-            handled=cov.handled,
-            waived=cov.waived,
-            blocking=cov.blocking,
-            ratio=cov.ratio,
-        ),
+        coverage=_coverage_summary(cov),
         unparsed=_issues(policy),
     )
 
@@ -231,19 +244,141 @@ def prove(
     )
 
 
-def gate(text: str, dialect: str | None = None) -> NoReturn:
-    """Gates G1-G6 arrive with the migration-governance spec (task 9)."""
-    raise NecroError(
-        "not-implemented",
-        "gate is not implemented yet: gates G1-G6 arrive with migration-governance task 9",
-        kind="not-implemented",
+def parse_golden_text(text: str | None) -> list[GoldenVector]:
+    """Golden flows from TOML text (API and MCP). Empty text means none."""
+    if not text:
+        return []
+    try:
+        return parse_golden(text)
+    except (ValueError, KeyError, tomllib.TOMLDecodeError) as exc:
+        raise NecroError("invalid-golden", f"cannot read the golden flows: {exc}") from exc
+
+
+def assess(
+    text: str,
+    dialect: str | None = None,
+    *,
+    sidecar: Sidecar | None = None,
+    budget: int | None = None,
+    seed: int | None = None,
+    profile: str | None = None,
+    golden: Sequence[GoldenVector] = (),
+    input_name: str = DEFAULT_INPUT_NAME,
+    today: date | None = None,
+    now: datetime | None = None,
+    options: Mapping[str, str] | None = None,
+) -> Assessment:
+    """Parse, resurrect, prove and judge a config: everything the verdict and report need.
+
+    The budget defaults to the ``ci`` profile (not ``HYPOTHESIS_PROFILE``): a GO verdict needs at
+    least that many examples per context (governance rule R3), and a lower budget is an explicit
+    choice that gate G4 will report. ``today`` (waiver expiry) and ``now`` (header time) default to
+    the clock and can be set for tests.
+    """
+    check_size(text)
+    original_sha256 = sha256_text(text)
+    policy = load(text, dialect)
+    examples = resolve_budget(budget, profile or DEFAULT_GATE_PROFILE)
+    label = "custom" if budget is not None else (profile or DEFAULT_GATE_PROFILE)
+    stamp = now or utc_now()
+    run_options = {
+        "dialect": f"{dialect} (stated)" if dialect else "detected",
+        "golden flows": str(len(golden)),
+        "tightening": "none",
+        **(options or {}),
+    }
+    core = compute_core(
+        policy,
+        original_sha256=original_sha256,
+        input_name=input_name,
+        budget=examples,
+        seed=DEFAULT_SEED if seed is None else seed,
+        profile=label,
+        golden=golden,
+        options=run_options,
+    )
+    return assemble(core, sidecar or Sidecar(), today or stamp.date(), stamp)
+
+
+def _gate_fields(a: Assessment) -> dict[str, object]:
+    proof = a.core.proof
+    return {
+        "dialect": a.core.policy.dialect.value,
+        "verdict": a.verdict,
+        "coverage": _coverage_summary(a.core.coverage),
+        "proof_passed": None if proof is None else proof.passed,
+        "examples_per_context": a.core.budget,
+        "seed": a.core.seed,
+        "profile": a.core.profile,
+        "golden_total": 0 if proof is None else proof.golden.total,
+        "golden_passed": 0 if proof is None else proof.golden.passed,
+    }
+
+
+def gate_response(a: Assessment) -> GateResponse:
+    """The gate result of an assessment."""
+    return GateResponse.model_validate(_gate_fields(a))
+
+
+def grimoire_response(a: Assessment) -> GrimoireResponse:
+    """The gate result of an assessment plus its Grimoire (Markdown and HTML)."""
+    return GrimoireResponse.model_validate(
+        {
+            **_gate_fields(a),
+            "markdown": report.render_md(a),
+            "html": report.render_html(a),
+            "body_sha256": report.body_sha256(a),
+        }
     )
 
 
-def grimoire(text: str, dialect: str | None = None) -> NoReturn:
-    """The Grimoire report arrives with the migration-governance spec (task 9.1)."""
-    raise NecroError(
-        "not-implemented",
-        "grimoire is not implemented yet: the report arrives with migration-governance task 9",
-        kind="not-implemented",
+def gate(
+    text: str,
+    dialect: str | None = None,
+    *,
+    sidecar: Sidecar | None = None,
+    budget: int | None = None,
+    seed: int | None = None,
+    profile: str | None = None,
+    golden: Sequence[GoldenVector] = (),
+    input_name: str = DEFAULT_INPUT_NAME,
+) -> GateResponse:
+    """Gates G1 to G6 and the readiness verdict (see ``assess``)."""
+    return gate_response(
+        assess(
+            text,
+            dialect,
+            sidecar=sidecar,
+            budget=budget,
+            seed=seed,
+            profile=profile,
+            golden=golden,
+            input_name=input_name,
+        )
+    )
+
+
+def grimoire(
+    text: str,
+    dialect: str | None = None,
+    *,
+    sidecar: Sidecar | None = None,
+    budget: int | None = None,
+    seed: int | None = None,
+    profile: str | None = None,
+    golden: Sequence[GoldenVector] = (),
+    input_name: str = DEFAULT_INPUT_NAME,
+) -> GrimoireResponse:
+    """The verdict and the Grimoire report (see ``assess``)."""
+    return grimoire_response(
+        assess(
+            text,
+            dialect,
+            sidecar=sidecar,
+            budget=budget,
+            seed=seed,
+            profile=profile,
+            golden=golden,
+            input_name=input_name,
+        )
     )

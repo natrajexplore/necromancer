@@ -7,6 +7,7 @@ The secret-looking strings are the synthetic placeholders already in samples/dea
 from __future__ import annotations
 
 import json
+import re
 import socket
 from collections.abc import Generator
 from unittest.mock import patch
@@ -17,6 +18,7 @@ from fastapi.testclient import TestClient
 from api.main import create_app, handler
 from api.middleware import RATE_WINDOW_S, RateLimiter
 from necro import __version__
+from tests.gov_helpers import GO_CONFIG, GOLDEN, core_for, full_sidecar
 from tests.panos_helpers import SAMPLES
 
 CONFIG = (SAMPLES / "pix-2006-hq.cfg").read_text(encoding="utf-8")
@@ -135,11 +137,108 @@ def test_upload_over_2_mb_is_413(client: TestClient) -> None:
     assert huge.status_code == 413 and huge.json()["code"] == "too-large"
 
 
-def test_gate_and_grimoire_say_not_implemented(client: TestClient) -> None:
-    for name in ("gate", "grimoire"):
-        response = _post(client, name)
-        assert response.status_code == 501  # type: ignore[attr-defined]
-        assert response.json()["code"] == "not-implemented"  # type: ignore[attr-defined]
+GATES = ["G1", "G2", "G3", "G4", "G5", "G6"]
+
+
+def test_gate_returns_the_verdict_with_gates_and_the_audit_header(client: TestClient) -> None:
+    response = _post(client, "gate", dialect="pix", budget=60, seed=5)
+    body = response.json()  # type: ignore[attr-defined]
+    assert response.status_code == 200 and body["api_version"] == "v1"  # type: ignore[attr-defined]
+    verdict = body["verdict"]
+    assert verdict["value"] == "NO-GO" and [g["gate"] for g in verdict["gates"]] == GATES
+    assert verdict["blocking_reasons"] and verdict["blocking_reasons"][0].startswith("G")
+    audit = verdict["audit"]
+    assert audit["tool_version"] == __version__ and audit["git_commit"]
+    assert audit["seed"] == 5 and audit["budget"] == 60 and audit["generated_at"]
+    assert len(audit["inputs"]) == 2 and set(audit["outputs"]) == {
+        "panos-baseline.set",
+        "source-redacted.cfg",
+    }
+    assert body["examples_per_context"] == 60 and body["profile"] == "custom"
+    assert body["proof_passed"] is True and body["coverage"]["total_lines"] > 0
+
+
+def test_gate_defaults_to_the_ci_budget_and_a_profile_can_lower_it(client: TestClient) -> None:
+    default = _post(client, "gate", dialect="pix").json()  # type: ignore[attr-defined]
+    assert default["examples_per_context"] == 5000 and default["profile"] == "ci"
+    assert not any("below the ci budget" in r for r in default["verdict"]["blocking_reasons"])
+    dev = _post(client, "gate", dialect="pix", profile="dev").json()  # type: ignore[attr-defined]
+    assert dev["examples_per_context"] == 500 and dev["profile"] == "dev"
+    assert any("below the ci budget" in r for r in dev["verdict"]["blocking_reasons"])
+
+
+def test_gate_reaches_go_with_a_complete_sidecar_in_the_request_body(client: TestClient) -> None:
+    sidecar = full_sidecar(core_for(GO_CONFIG, "asa"))
+    body = {"config": GO_CONFIG, "dialect": "asa", "sidecar": sidecar.model_dump(mode="json")}
+    response = client.post("/v1/gate", json=body)
+    assert response.status_code == 200
+    verdict = response.json()["verdict"]
+    assert verdict["value"] == "GO" and verdict["blocking_reasons"] == []
+    refused = client.post("/v1/gate", json={"config": GO_CONFIG, "dialect": "asa"})
+    assert refused.json()["verdict"]["value"] == "NO-GO"  # the sidecar is not stored
+
+
+def test_a_sidecar_with_an_unknown_key_or_a_bare_decision_is_a_structured_422(
+    client: TestClient,
+) -> None:
+    for sidecar in ({"waivres": []}, {"ledger_decisions": {"LED-0001": "accepted"}}):
+        response = _post(client, "gate", sidecar=sidecar)
+        assert response.status_code == 422  # type: ignore[attr-defined]
+        assert response.json()["code"] == "invalid-request"  # type: ignore[attr-defined]
+
+
+def test_gate_runs_golden_flows_given_as_toml_text(client: TestClient) -> None:
+    golden = (GOLDEN / "pix-2006-hq.toml").read_text(encoding="utf-8")
+    body = _post(client, "gate", dialect="pix", budget=40, golden=golden).json()  # type: ignore[attr-defined]
+    assert body["golden_total"] == 16 and body["golden_passed"] == 16
+    for bad in ("[[flow]]\nid = 'X'\n", "not toml ["):
+        response = _post(client, "gate", dialect="pix", budget=20, golden=bad)
+        assert response.status_code == 422  # type: ignore[attr-defined]
+        assert response.json()["code"] == "invalid-golden"  # type: ignore[attr-defined]
+
+
+def test_grimoire_returns_markdown_html_and_a_body_hash(client: TestClient) -> None:
+    first = _post(client, "grimoire", dialect="pix", budget=40, name="hq-firewall.cfg").json()  # type: ignore[attr-defined]
+    second = _post(client, "grimoire", dialect="pix", budget=40, name="hq-firewall.cfg").json()  # type: ignore[attr-defined]
+    assert first["markdown"].startswith("# Grimoire: migration evidence report: hq-firewall.cfg\n")
+    assert first["html"].startswith("<!DOCTYPE html>") and "<h2>10. Appendix</h2>" in first["html"]
+    assert re.findall(r"^## (\d+)\. ", first["markdown"], flags=re.MULTILINE) == [
+        str(n) for n in range(1, 11)
+    ]
+    assert first["verdict"]["value"] in ("GO", "CONDITIONAL", "NO-GO")
+    assert first["body_sha256"] == second["body_sha256"] and len(first["body_sha256"]) == 64
+
+
+def test_grimoire_escapes_the_input_name(client: TestClient) -> None:
+    body = _post(
+        client, "grimoire", dialect="pix", budget=20, name="<script>alert(1)</script>"
+    ).json()  # type: ignore[attr-defined]
+    assert "<script>" not in body["html"] and "&lt;script&gt;" in body["html"]
+    assert body["markdown"].splitlines()[0].startswith("# Grimoire")
+
+
+def test_gate_and_grimoire_refuse_what_the_other_endpoints_refuse(client: TestClient) -> None:
+    for path in ("gate", "grimoire"):
+        assert _post(client, path, budget=20_001).status_code == 422  # type: ignore[attr-defined]
+        assert _post(client, path, profile="huge").json()["code"] == "invalid-profile"  # type: ignore[attr-defined]
+        cycle = (BROKEN / "asa-group-cycle.cfg").read_text(encoding="utf-8")
+        response = client.post(f"/v1/{path}", json={"config": cycle})
+        assert response.status_code == 422 and response.json()["line_no"] > 0
+        too_big = client.post(f"/v1/{path}", json={"config": "! padding\n" * 230_000})
+        assert too_big.status_code == 413 and too_big.json()["code"] == "too-large"
+
+
+def test_gate_and_grimoire_logs_hold_counts_only(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level("INFO", logger="necro.api"):
+        _post(client, "gate", dialect="pix", budget=20)
+        _post(client, "grimoire", dialect="pix", budget=20)
+    entries = [json.loads(r.getMessage()) for r in caplog.records if r.name == "necro.api"]
+    assert [e["status"] for e in entries] == [200, 200]
+    assert entries[0]["counts"]["blocking"] > 0 and entries[1]["counts"]["report_chars"] > 0
+    for token in (*SAMPLE_SECRETS, "access-list", "telnet", "Grimoire"):
+        assert token not in caplog.text
 
 
 def test_unknown_route_and_wrong_method_are_structured(client: TestClient) -> None:
@@ -188,7 +287,7 @@ def test_logs_have_ids_and_counts_but_never_config_lines(
 
 def test_sample_secrets_never_reach_a_response(client: TestClient) -> None:
     assert all(token in CONFIG for token in SAMPLE_SECRETS)
-    for path in ("exhume", "autopsy", "resurrect", "prove"):
+    for path in ("exhume", "autopsy", "resurrect", "prove", "gate", "grimoire"):
         body = client.post(f"/v1/{path}", json={"config": CONFIG, "budget": 20}).text
         assert not [t for t in SAMPLE_SECRETS if t in body], path
 

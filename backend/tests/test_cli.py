@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import subprocess
 import sys
 import time
@@ -13,6 +15,7 @@ import pytest
 from necro import __version__
 from necro.cli import main
 from necro.service import NecroError, check_size, resolve_budget, run_limited
+from tests.gov_helpers import GO_CONFIG, core_for, full_sidecar, sidecar_json
 from tests.panos_helpers import SAMPLES
 
 PIX = str(SAMPLES / "pix-2006-hq.cfg")
@@ -93,8 +96,10 @@ def test_a_divergence_exits_one_with_the_counterexample(
         ["prove", PIX, "--budget", "0"],
         ["prove", PIX, "--budget", "20001"],
         ["prove", PIX, "--golden", "no-such.toml"],
-        ["gate", PIX],
-        ["grimoire", PIX],
+        ["gate", "no-such-file.cfg"],
+        ["grimoire", "no-such-file.cfg"],
+        ["gate", PIX, "--sidecar", "no-such-sidecar.json"],
+        ["gate", PIX, "--format", "html"],
     ],
 )
 def test_input_errors_exit_two_with_a_message_on_stderr(
@@ -157,6 +162,158 @@ def test_python_dash_m_necro_propagates_exit_codes() -> None:
         check=False,
     )
     assert bad.returncode == 2 and "necro: error" in bad.stderr
+
+
+# -- gate and grimoire (migration-governance task 9) ------------------------------------------
+
+FAST = ("--dialect", "pix", "--budget", "40")
+LEDGER_DECISION = 'approval = "accepted"\napprover = "Dana Approver"\ndecided_at = "2026-11-23"\n'
+
+
+def test_gate_exits_one_for_no_go_and_says_why(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, _ = run(capsys, "gate", PIX, *FAST)
+    assert code == 1
+    assert "verdict" in out and "NO-GO" in out and "Blocking reasons" in out
+    assert re.search(r"^G5\s+fail", out, flags=re.MULTILINE)
+
+
+def test_gate_json_has_the_verdict_gates_and_the_audit_header(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code, out, _ = run(capsys, "gate", PIX, *FAST, "--format", "json", "--seed", "9")
+    body = json.loads(out)
+    assert code == 1 and body["verdict"]["value"] == "NO-GO" and body["seed"] == 9
+    assert [g["gate"] for g in body["verdict"]["gates"]] == ["G1", "G2", "G3", "G4", "G5", "G6"]
+    audit = body["verdict"]["audit"]
+    assert audit["tool_version"] == __version__ and audit["budget"] == 40
+    assert audit["inputs"]["pix-2006-hq.cfg"] == hashlib.sha256(Path(PIX).read_bytes()).hexdigest()
+
+
+def test_gate_md_format_is_a_markdown_document(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, _ = run(capsys, "gate", PIX, *FAST, "--format", "md")
+    assert code == 1 and out.startswith("# Readiness gates\n")
+    assert "## Gates" in out and re.search(r"^\| G1 \| pass \| 0 \|$", out, flags=re.MULTILINE)
+
+
+def test_gate_exits_zero_for_go_and_for_conditional(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    config = tmp_path / "lab.cfg"
+    config.write_text(GO_CONFIG, encoding="utf-8")
+    core = core_for(GO_CONFIG, "asa")
+    side = tmp_path / "side.json"
+    side.write_text(sidecar_json(full_sidecar(core)), encoding="utf-8")
+    code, out, _ = run(capsys, "gate", str(config), "--dialect", "asa", "--sidecar", str(side))
+    assert code == 0 and "GO" in out and "(ci)" in out  # the default is the ci budget
+    four_eyes = tmp_path / "four-eyes.json"
+    four_eyes.write_text(
+        sidecar_json(full_sidecar(core, peer_reviewer="Alex Engineer")), encoding="utf-8"
+    )
+    code, out, _ = run(capsys, "gate", str(config), "--dialect", "asa", "--sidecar", str(four_eyes))
+    assert code == 0 and "CONDITIONAL" in out and "four-eyes" in out
+
+
+def test_a_toml_sidecar_works_too(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    config = tmp_path / "lab.cfg"
+    config.write_text(GO_CONFIG, encoding="utf-8")
+    ids = [e.id for e in core_for(GO_CONFIG, "asa").emission.ledger]
+    toml = (
+        '[change]\nchange_id = "CHG-7"\nrequested_by = "Alex Engineer"\n'
+        'peer_reviewer = "Robin Reviewer"\ncab_reference = "CAB-1"\n'
+        + "".join(f"[ledger_decisions.{i}]\n{LEDGER_DECISION}" for i in ids)
+    )
+    side = tmp_path / "side.toml"
+    side.write_text(toml, encoding="utf-8")
+    code, out, _ = run(capsys, "gate", str(config), "--dialect", "asa", "--sidecar", str(side))
+    assert code == 0 and "GO" in out
+
+
+def test_gate_and_grimoire_default_to_the_ci_budget_whatever_hypothesis_profile_is_set(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HYPOTHESIS_PROFILE", "dev")
+    _, out, _ = run(capsys, "gate", PIX, "--dialect", "pix", "--format", "json")
+    assert json.loads(out)["examples_per_context"] == 5000
+    _, out, _ = run(capsys, "gate", PIX, "--dialect", "pix", "--profile", "dev", "--format", "json")
+    assert json.loads(out)["examples_per_context"] == 500
+
+
+def test_grimoire_prints_the_report_and_exits_zero_even_for_no_go(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code, out, _ = run(capsys, "grimoire", PIX, *FAST)
+    assert code == 0 and out.startswith("# Grimoire: migration evidence report: pix-2006-hq.cfg")
+    assert "Readiness verdict: NO-GO." in out
+    assert re.findall(r"^## (\d+)\. ", out, flags=re.MULTILINE) == [str(n) for n in range(1, 11)]
+    code, html_out, _ = run(capsys, "grimoire", PIX, *FAST, "--format", "html")
+    assert (
+        code == 0 and html_out.startswith("<!DOCTYPE html>") and "<h2>1. Verdict</h2>" in html_out
+    )
+    code, as_json, _ = run(capsys, "grimoire", PIX, *FAST, "--format", "json")
+    body = json.loads(as_json)
+    assert (
+        code == 0 and body["markdown"].startswith("# Grimoire") and len(body["body_sha256"]) == 64
+    )
+
+
+def test_the_report_body_hash_is_the_same_on_every_run(capsys: pytest.CaptureFixture[str]) -> None:
+    hashes = {
+        json.loads(run(capsys, "grimoire", PIX, *FAST, "--seed", "3", "--format", "json")[1])[
+            "body_sha256"
+        ]
+        for _ in range(2)
+    }
+    assert len(hashes) == 1
+
+
+def test_the_input_hash_is_that_of_the_file_bytes_even_with_crlf_line_endings(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    config = tmp_path / "crlf.cfg"
+    config.write_bytes(Path(PIX).read_bytes().replace(b"\n", b"\r\n"))
+    _, out, _ = run(capsys, "gate", str(config), *FAST, "--format", "json")
+    audit = json.loads(out)["verdict"]["audit"]
+    assert audit["inputs"]["crlf.cfg"] == hashlib.sha256(config.read_bytes()).hexdigest()
+    assert audit["inputs"]["crlf.cfg"] != hashlib.sha256(Path(PIX).read_bytes()).hexdigest()
+
+
+@pytest.mark.parametrize(
+    ("name", "content", "needle"),
+    [
+        ("bad.json", "{not json", "not valid JSON"),
+        ("bad.toml", "waivers = [", "not valid TOML"),
+        ("typo.json", '{"waivres": []}', "waivres"),
+        ("bare.json", '{"ledger_decisions": {"LED-0001": "accepted"}}', "needs approval"),
+        ("notes.txt", "{}", "a .json or .toml file"),
+    ],
+)
+def test_a_bad_sidecar_is_an_input_error(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, name: str, content: str, needle: str
+) -> None:
+    side = tmp_path / name
+    side.write_text(content, encoding="utf-8")
+    code, out, err = run(capsys, "gate", PIX, *FAST, "--sidecar", str(side))
+    assert code == 2 and not out and "invalid-sidecar" in err and needle in err
+
+
+def test_python_dash_m_necro_gate_propagates_the_no_go_exit_code() -> None:
+    done = subprocess.run(
+        [sys.executable, "-m", "necro", "gate", PIX, *FAST, "--format", "json"],
+        cwd=BACKEND,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 1 and json.loads(done.stdout)["verdict"]["value"] == "NO-GO"
+
+
+def test_gate_output_never_holds_a_secret(capsys: pytest.CaptureFixture[str]) -> None:
+    secrets = ("8Ry2YjIyt7RRXU24", "2KFQnbNIdI.2KYOU", "n0t-a-real-community")
+    for command in ("gate", "grimoire"):
+        for fmt in ("json", "md") if command == "gate" else ("json", "md", "html"):
+            _, out, err = run(capsys, command, PIX, *FAST, "--format", fmt)
+            assert not [s for s in secrets if s in out + err], (command, fmt)
 
 
 # -- service limits ---------------------------------------------------------------------------

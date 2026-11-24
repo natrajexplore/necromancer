@@ -13,10 +13,11 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 from necro import mcp_tools
-from necro.version import __version__
+from necro.version import __version__, git_commit
 
 
 def build_server() -> FastMCP:
+    git_commit()  # resolve it now (cached), before the protocol loop owns stdin
     server = FastMCP("necromancer", instructions=f"NECROMANCER {__version__}")
     for tool in mcp_tools.TOOLS:
         server.add_tool(tool, name=tool.__name__, description=tool.__doc__)

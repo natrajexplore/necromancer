@@ -17,10 +17,15 @@ from mangum import Mangum
 from api.errors import install_error_handlers
 from api.middleware import GuardMiddleware, RateLimiter
 from necro import service
+from necro.assessment import Assessment
+from necro.audit import DEFAULT_INPUT_NAME
 from necro.schemas import (
     AutopsyResult,
     ConfigRequest,
     ExhumeResult,
+    GateRequest,
+    GateResponse,
+    GrimoireResponse,
     ProveRequest,
     ProveResult,
     ResurrectResult,
@@ -33,6 +38,20 @@ RATE_PER_MINUTE = 10
 
 def _counts(request: Request, **counts: int) -> None:
     request.state.counts = counts  # sizes and counts only, never config lines
+
+
+def _assess(body: GateRequest) -> Assessment:
+    """Run the gates for a request. The sidecar is used for this response and not stored."""
+    return service.assess(
+        body.config,
+        body.dialect,
+        sidecar=body.sidecar,
+        budget=body.budget,
+        seed=body.seed,
+        profile=body.profile,
+        golden=service.parse_golden_text(body.golden),
+        input_name=body.name or DEFAULT_INPUT_NAME,
+    )
 
 
 def build_v1() -> APIRouter:
@@ -85,12 +104,29 @@ def build_v1() -> APIRouter:
         return result
 
     @router.post("/gate")
-    def gate(body: ConfigRequest) -> None:
-        service.gate(body.config, body.dialect)
+    def gate(body: GateRequest, request: Request) -> GateResponse:
+        assessed = _assess(body)
+        result = service.gate_response(assessed)
+        _counts(
+            request,
+            chars=len(body.config),
+            blocking=len(result.verdict.blocking_reasons),
+            go=int(result.verdict.value != "NO-GO"),
+        )
+        return result
 
     @router.post("/grimoire")
-    def grimoire(body: ConfigRequest) -> None:
-        service.grimoire(body.config, body.dialect)
+    def grimoire(body: GateRequest, request: Request) -> GrimoireResponse:
+        assessed = _assess(body)
+        result = service.grimoire_response(assessed)
+        _counts(
+            request,
+            chars=len(body.config),
+            blocking=len(result.verdict.blocking_reasons),
+            go=int(result.verdict.value != "NO-GO"),
+            report_chars=len(result.markdown),
+        )
+        return result
 
     return router
 

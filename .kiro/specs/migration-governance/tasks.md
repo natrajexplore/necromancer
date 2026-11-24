@@ -16,7 +16,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
 - [x] 8. Runbook: pre-checks, PAN-OS `test security-policy-match` list, ASA `packet-tracer` list, rollback, hypercare; snapshot tests per sample
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
-- [ ] 9. Wire into API (`/v1/gate`, `/v1/grimoire`), CLI (`necro gate`, exit codes) and the MCP `gate` tool
+- [x] 9. Wire into API (`/v1/gate`, `/v1/grimoire`), CLI (`necro gate`, exit codes) and the MCP `gate` tool
   - _Requirements: 6.1, 6.2_
 - [ ] 10. **[P2]** PDF export of the report; CSV export of findings and ledger
   - _Requirements: 4.7_

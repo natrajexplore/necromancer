@@ -10,12 +10,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from necro.service import ErrorKind, NecroError
 
 # 422 for input errors (parse errors carry line_no), 413 over the size limit,
-# 504 when the parse timeout fires, 501 for features that arrive with later specs.
+# 504 when the parse timeout fires.
 STATUS: dict[ErrorKind, int] = {
     "input": 422,
     "too-large": 413,
     "timeout": 504,
-    "not-implemented": 501,
 }
 
 

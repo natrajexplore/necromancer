@@ -88,10 +88,15 @@ def _vector(raw: dict[str, object]) -> GoldenVector:
     )
 
 
+def parse_golden(text: str) -> list[GoldenVector]:
+    """The vectors of golden-flow TOML text, in order."""
+    data = tomllib.loads(text)
+    return [_vector(raw) for raw in data.get("flow", [])]
+
+
 def load_golden(path: Path) -> list[GoldenVector]:
     """The vectors of one ``*.toml`` file, in file order."""
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
-    return [_vector(raw) for raw in data.get("flow", [])]
+    return parse_golden(path.read_text(encoding="utf-8"))
 
 
 def check_golden(sides: Sides, vectors: Sequence[GoldenVector]) -> GoldenResult:

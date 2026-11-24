@@ -10,7 +10,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from necro.proof_types import Counterexample
-from necro.schemas import AutopsyResult, ExhumeResult, ProveResult, ResurrectResult
+from necro.schemas import (
+    AutopsyResult,
+    ExhumeResult,
+    GateResponse,
+    ProveResult,
+    ResurrectResult,
+)
 
 
 @dataclass
@@ -163,6 +169,34 @@ def prove_doc(r: ProveResult) -> Doc:
     ]
     headers = ["context", "kind", "examples", "result", "source rules hit", "candidate rules hit"]
     return Doc("Proof of Life", facts, [Table("Contexts", headers, rows)])
+
+
+def gate_doc(r: GateResponse) -> Doc:
+    """The verdict first, then the gates, the blocking reasons and the conditions."""
+    v = r.verdict
+    facts = [
+        ("verdict", v.value),
+        ("dialect", r.dialect),
+        ("coverage", f"{r.coverage.ratio * 100:.1f}% of {r.coverage.security_relevant} lines"),
+        ("proof", "not run" if r.proof_passed is None else ("pass" if r.proof_passed else "FAIL")),
+        ("examples per context", f"{r.examples_per_context} ({r.profile})"),
+        ("seed", str(r.seed)),
+        ("golden flows", f"{r.golden_passed} of {r.golden_total} passed"),
+    ]
+    return Doc(
+        "Readiness gates",
+        facts,
+        [
+            Table(
+                "Gates",
+                ["gate", "status", "blocking reasons"],
+                [[g.gate, g.status, str(len(g.blocking_reasons))] for g in v.gates],
+            ),
+            Table("Blocking reasons", ["reason"], [[b] for b in v.blocking_reasons]),
+            Table("Conditions", ["condition"], [[c] for c in v.conditions]),
+            Table("Notes", ["note"], [[n] for n in v.notes]),
+        ],
+    )
 
 
 def render_text(doc: Doc) -> str:

@@ -22,6 +22,7 @@ def git_commit() -> str:
         done = subprocess.run(  # fixed arguments, no user input
             ["git", "rev-parse", "--short=12", "HEAD"],
             cwd=Path(__file__).resolve().parent,
+            stdin=subprocess.DEVNULL,  # never the caller's stdin: under MCP it is the protocol pipe
             capture_output=True,
             text=True,
             timeout=3,

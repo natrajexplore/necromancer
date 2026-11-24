@@ -80,7 +80,7 @@
   - _Requirements: 6.5, 8.1_
 
 - [ ] 9. Interfaces
-- [ ] 9.1 Grimoire report (see migration-governance tasks)
+- [x] 9.1 Grimoire report (see migration-governance tasks)
   - _Requirements: 7.1_
 - [x] 9.2 FastAPI `/v1` endpoints + `/healthz` + mangum handler + limits + structured errors + security headers
   - _Requirements: 7.2, 7.5_

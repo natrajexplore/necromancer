@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from necro import service
+from necro.gate_models import Sidecar
 from necro.service import NecroError
 from necro.version import __version__, git_commit
 
@@ -57,9 +58,42 @@ def prove(
     )
 
 
-def gate(config: str, dialect: str | None = None) -> dict[str, Any]:
-    """Readiness gates G1-G6 and the GO / CONDITIONAL / NO-GO verdict (not implemented yet)."""
-    return _guarded(lambda: service.gate(config, dialect))
+def _sidecar(data: dict[str, Any] | None) -> Sidecar | None:
+    if not data:
+        return None
+    try:
+        return Sidecar.model_validate(data)
+    except ValueError as exc:
+        raise NecroError("invalid-sidecar", f"the sidecar is not valid: {exc}") from exc
+
+
+def gate(
+    config: str,
+    dialect: str | None = None,
+    budget: int | None = None,
+    seed: int | None = None,
+    profile: str | None = None,
+    sidecar: dict[str, Any] | None = None,
+    golden: str | None = None,
+) -> dict[str, Any]:
+    """Readiness gates G1-G6 and the GO / CONDITIONAL / NO-GO verdict with blocking reasons.
+
+    Defaults to the ci budget (5,000 examples per context), which a GO verdict needs. ``sidecar``
+    holds waivers, accepted_risks, ledger_decisions, change and runbook overrides. ``golden`` is
+    golden-flow TOML text."""
+    return _guarded(
+        lambda: _dump(
+            service.gate(
+                config,
+                dialect,
+                sidecar=_sidecar(sidecar),
+                budget=budget,
+                seed=seed,
+                profile=profile,
+                golden=service.parse_golden_text(golden),
+            )
+        )
+    )
 
 
 def server_info() -> dict[str, str]:

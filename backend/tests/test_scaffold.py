@@ -28,3 +28,25 @@ def test_socket_guard_active() -> None:
 
     with pytest.raises((RuntimeError, OSError)):
         socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+
+def test_git_commit_never_reads_the_callers_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Under MCP, stdin is the protocol pipe: a ``git`` child that inherits it waits forever."""
+    import subprocess
+
+    from necro import version
+
+    seen: dict[str, object] = {}
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(args=[], returncode=0, stdout="abc123def456\n")
+
+    monkeypatch.delenv("NECRO_GIT_COMMIT", raising=False)
+    monkeypatch.setattr(version.subprocess, "run", fake_run)
+    version.git_commit.cache_clear()
+    try:
+        assert version.git_commit() == "abc123def456"
+        assert seen["stdin"] is subprocess.DEVNULL and seen["timeout"] == 3
+    finally:
+        version.git_commit.cache_clear()
