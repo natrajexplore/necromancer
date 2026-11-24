@@ -65,3 +65,9 @@
 - What Kiro did: Built the PAN-OS emitter, exorcism ledger and reader, and ran generated-policy equivalence checks that found and fixed three emitter bugs.
 - What the human corrected: Nothing this session; Kiro dropped the Hypothesis deadline on the P3 tests after a timing failure under coverage.
 - Kiro feature used: specs, hooks, steering, PBT
+
+## 2026-11-21 — CLI
+- Spec task(s): necro-engine/6.1-6.6 (re-requested)
+- What Kiro did: Confirmed 6.1-6.6 were already ticked, committed and pushed, and pushed the pending journal commit (462d555).
+- What the human corrected: Nothing; the request repeated finished work.
+- Kiro feature used: specs, hooks
