@@ -71,3 +71,9 @@
 - What Kiro did: Confirmed 6.1-6.6 were already ticked, committed and pushed, and pushed the pending journal commit (462d555).
 - What the human corrected: Nothing; the request repeated finished work.
 - Kiro feature used: specs, hooks
+
+## 2026-11-24 — IDE
+- Spec task(s): necro-engine/7
+- What Kiro did: Added tighten.py and tighten_regions.py (remediations, ledger with approvals, separate tightened artifact) and PBT P6; all gates green at 98% coverage.
+- What the human corrected: Nothing; Kiro corrected its own tasks.md encoding damage in a follow-up commit.
+- Kiro feature used: specs, steering, hooks, PBT
