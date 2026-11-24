@@ -28,7 +28,7 @@ from __future__ import annotations
 import ipaddress
 from dataclasses import dataclass, field
 
-from necro.ir import Flow, NatType, Policy
+from necro.ir import AddressSpace, Context, Dialect, Flow, NatType, Policy
 from necro.sets import AddrSet
 
 
@@ -144,3 +144,33 @@ class NatModel:
                 translated = int(real_nets[0].network_address) + offset
                 return ipaddress.IPv4Address(translated)
         return dst
+
+
+def to_panos_space(policy: Policy, ctx: Context, flow: Flow) -> Flow:
+    """The flow as a PAN-OS security rule sees it (policy-semantics 1.5 and 7).
+
+    ASA 8.3+ ACLs are written with the *real* destination, but a PAN-OS rule matches the pre-NAT
+    destination, which is the *mapped* address. A flow that arrives on the mapped interface of a
+    static NAT with a real destination is therefore rewritten to the mapped address. Everywhere
+    else the flow is unchanged: pre-8.3 ACLs already use mapped addresses (the zone comes from the
+    real address, which ``decide`` handles), and IOS has no translation. Port translation is not
+    modelled: service-translating NAT is an unsupported construct in v1.
+    """
+    if policy.address_space != AddressSpace.real or policy.dialect == Dialect.ios:
+        return flow
+    for rule in policy.nat_rules:
+        if rule.nat_type != NatType.static or rule.mapped_interface != ctx.interface:
+            continue
+        if not rule.real_addr.contains(flow.dst):
+            continue
+        port_static_miss = rule.proto is not None and (
+            flow.proto != rule.proto or not rule.real_ports.contains(flow.dst_port)
+        )
+        real_nets = rule.real_addr.to_networks()
+        mapped_nets = rule.mapped_addr.to_networks()
+        if port_static_miss or not real_nets or not mapped_nets:
+            continue
+        offset = int(flow.dst) - int(real_nets[0].network_address)
+        mapped = ipaddress.IPv4Address(int(mapped_nets[0].network_address) + offset)
+        return flow.model_copy(update={"dst": mapped})
+    return flow

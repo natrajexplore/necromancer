@@ -70,7 +70,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
 - [ ] 8. Proof of Life oracle
-- [ ] 8.1 Boundary-biased flow strategy (incl. NAT and device addresses, all named ICMP types) with `hypothesis.target()`
+- [x] 8.1 Boundary-biased flow strategy (incl. NAT and device addresses, all named ICMP types) with `hypothesis.target()`
   - _Requirements: 6.1_
 - [ ] 8.2 `prove()` per context incl. implicit contexts, with golden flows first; ProofResult (pass with coverage + unhit rules + seed, or the shrunk counterexample with both decisions and zones)
   - _Requirements: 6.3, 6.4, 6.6, 6.8_

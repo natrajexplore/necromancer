@@ -200,3 +200,8 @@ def all_icmp_type_names() -> list[str]:
 def all_icmp_types() -> list[int]:
     """Return all known ICMP type numbers (for strategy generation in PBT)."""
     return list(_ICMP_TYPES.values())
+
+
+def all_named_ports() -> list[int]:
+    """Every port number that has a Cisco name for TCP or UDP, sorted (for the oracle's flows)."""
+    return sorted({port for table in _PORT_TABLES.values() for port in table.values()})

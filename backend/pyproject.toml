@@ -10,6 +10,8 @@ dependencies = [
     "mangum>=0.19",
     "mcp>=1.3",
     "uvicorn[standard]>=0.30",
+    # The Proof of Life oracle (necro/oracle.py) searches with Hypothesis at runtime.
+    "hypothesis>=6.100",
 ]
 
 [project.scripts]
