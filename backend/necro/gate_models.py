@@ -84,6 +84,24 @@ class ChangeMeta(_Strict):
         return self
 
 
+class RunbookOverrides(_Strict):
+    """Changes to the runbook defaults (requirement 5.4): rollback triggers, the time the change
+    owner has to decide on a rollback, and the hypercare period. ``None`` keeps the default."""
+
+    rollback_triggers: list[str] | None = None
+    decision_time_limit_minutes: int | None = Field(default=None, ge=1, le=1440)
+    hypercare_business_days: int | None = Field(default=None, ge=1, le=90)
+
+    @field_validator("rollback_triggers")
+    @classmethod
+    def _triggers_not_blank(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None:
+            if not value or any(not item.strip() for item in value):
+                raise ValueError("rollback triggers must be a non-empty list of non-blank text")
+            return [item.strip() for item in value]
+        return value
+
+
 class Sidecar(_Strict):
     """Waivers, accepted risks, ledger decisions and change metadata, from a JSON or TOML file.
 
@@ -95,6 +113,7 @@ class Sidecar(_Strict):
     accepted_risks: list[Waiver] = Field(default_factory=list)
     ledger_decisions: dict[str, ApprovalDecision] = Field(default_factory=dict)
     change: ChangeMeta = Field(default_factory=ChangeMeta)
+    runbook: RunbookOverrides = Field(default_factory=RunbookOverrides)
 
     @field_validator("ledger_decisions", mode="before")
     @classmethod
