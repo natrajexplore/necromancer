@@ -12,14 +12,14 @@ def test_version_string() -> None:
 
 
 def test_cli_main_runs(capsys: pytest.CaptureFixture[str]) -> None:
-    """main() should print the stub message and exit cleanly."""
+    """main() is the console-script entry point; --version prints the name, version and commit."""
     from necro.cli import main
 
     with pytest.raises(SystemExit) as exc_info:
-        main()
+        main(["--version"])
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
-    assert "necromancer" in captured.out
+    assert "necromancer 0.1.0 (commit " in captured.out
 
 
 def test_socket_guard_active() -> None:
