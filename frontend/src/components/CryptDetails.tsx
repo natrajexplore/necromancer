@@ -1,8 +1,12 @@
-import { useId, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 import { useExhume, type Crypt } from "../api/hooks";
 import type { ExhumeResult } from "../api/types";
 import { dialectLabel, percent, plural } from "../lib/format";
+import { Autopsy } from "../screens/Autopsy";
+import { ProofOfLife } from "../screens/ProofOfLife";
+import { Resurrection } from "../screens/Resurrection";
+import { Verdict } from "../screens/Verdict";
 import { ErrorNotice } from "./ErrorNotice";
 import { UnquietLines } from "./UnquietLines";
 
@@ -56,12 +60,64 @@ function Summary({ result }: { result: ExhumeResult }) {
   );
 }
 
-/** What exhume found in one crypt: the summary, then every unquiet line. */
+type Stage = "exhume" | "autopsy" | "resurrect" | "prove" | "verdict";
+
+const STAGES: { id: Stage; label: string; plain: string }[] = [
+  { id: "exhume", label: "Exhume", plain: "what the config contains" },
+  { id: "autopsy", label: "Autopsy", plain: "ghost rules" },
+  { id: "resurrect", label: "Resurrect", plain: "PAN-OS candidate" },
+  { id: "prove", label: "Proof of Life", plain: "equivalence check" },
+  { id: "verdict", label: "Verdict", plain: "readiness gates and report" },
+];
+
+/** One crypt, through the ritual: exhume, autopsy, resurrect, prove, verdict. */
 export function CryptDetails({ crypt }: { crypt: Crypt }) {
+  const [stage, setStage] = useState<Stage>("exhume");
+  const headingId = useId();
+  return (
+    <div className="mt-10">
+      <nav aria-label="Stages of the ritual">
+        <ol className="flex flex-wrap gap-2">
+          {STAGES.map((entry, index) => (
+            <li key={entry.id}>
+              <button
+                type="button"
+                aria-current={stage === entry.id ? "step" : undefined}
+                onClick={() => setStage(entry.id)}
+                className={`rounded-md border px-4 py-2 text-left ${stage === entry.id ? "border-spectral bg-crypt text-spectral" : "border-stone text-bone hover:border-ash"}`}
+              >
+                {index + 1}. {entry.label}
+                <span className="block text-sm text-ash">{entry.plain}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      </nav>
+      {stage === "exhume" ? (
+        <ExhumeStage crypt={crypt} />
+      ) : (
+        <section aria-labelledby={headingId} className="mt-4 rounded-lg border border-stone bg-crypt p-6">
+          <h2 id={headingId} className="font-display text-2xl text-bone">
+            {crypt.name}: {STAGES.find((entry) => entry.id === stage)?.label}
+          </h2>
+          <div className="mt-4">
+            {stage === "autopsy" && <Autopsy crypt={crypt} />}
+            {stage === "resurrect" && <Resurrection crypt={crypt} />}
+            {stage === "prove" && <ProofOfLife crypt={crypt} />}
+            {stage === "verdict" && <Verdict crypt={crypt} />}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+/** What exhume found in one crypt: the summary, then every unquiet line. */
+function ExhumeStage({ crypt }: { crypt: Crypt }) {
   const headingId = useId();
   const exhumed = useExhume(crypt);
   return (
-    <section aria-labelledby={headingId} className="mt-10 rounded-lg border border-stone bg-crypt p-6">
+    <section aria-labelledby={headingId} className="mt-4 rounded-lg border border-stone bg-crypt p-6">
       <h2 id={headingId} className="font-display text-2xl text-bone">
         {crypt.name}
       </h2>

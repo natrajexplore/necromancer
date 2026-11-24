@@ -64,6 +64,39 @@
   animation: fog-drift 38s ease-in-out infinite alternate;
 }
 
+/* The resurrection rise: about 2.4 s. JavaScript skips the stage under reduced motion. */
+@keyframes rise {
+  from {
+    transform: translateY(70%);
+    opacity: 0;
+    filter: blur(6px);
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.rise {
+  animation: rise 2.4s ease-out both;
+}
+
+/* The heartbeat line draws itself once; a flat line when the proof failed. */
+@keyframes beat-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.beat {
+  stroke-dasharray: 1;
+  animation: beat-draw 1.6s linear both;
+}
+
 .candle {
   animation: candle-flicker 4s ease-in-out infinite;
 }

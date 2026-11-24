@@ -14,6 +14,7 @@ export interface ProveRequest extends ConfigRequest {
   budget?: number; // examples per context, 1 to 20,000; wins over profile
   seed?: number;
   profile?: "dev" | "ci" | "demo";
+  haunt?: boolean; // demo only: prove a deliberately broken candidate (the engine must support it)
 }
 
 /** The structured error every failed request returns: `{code, message, line_no?}`. */
@@ -187,19 +188,62 @@ export interface ProveResult {
   proof: ProofResult;
   ledger_entries: number;
   blocking_lines: number;
+  haunted?: boolean; // present and true only when the engine proved a deliberately broken candidate
 }
 
-/**
- * The Grimoire (report + verdict) arrives with the migration-governance spec. Until then the
- * backend answers 501 `not-implemented`, which the client raises as an ApiError.
- */
+export type GateId = "G1" | "G2" | "G3" | "G4" | "G5" | "G6";
+export type VerdictValue = "GO" | "CONDITIONAL" | "NO-GO";
+
+export interface Check {
+  id: string;
+  ok: boolean;
+  severity: "error" | "warning";
+  detail: string;
+}
+
+export interface GateResult {
+  gate: GateId;
+  status: "pass" | "fail" | "waived";
+  checks: Check[];
+  blocking_reasons: string[];
+}
+
+export interface Waiver {
+  target: string;
+  reason: string;
+  approver: string;
+  expires_on: string;
+}
+
+export interface Verdict {
+  value: VerdictValue;
+  gates: GateResult[];
+  blocking_reasons: string[];
+  conditions: string[];
+  waivers_used: Waiver[];
+  notes: string[];
+}
+
+/** The Grimoire: the verdict plus the report as Markdown and print-ready HTML (redacted). */
 export interface GrimoireResult {
   api_version: string;
-  [field: string]: unknown;
+  dialect: DialectName;
+  verdict: Verdict;
+  coverage: CoverageSummary;
+  proof_passed: boolean | null;
+  examples_per_context: number;
+  seed: number;
+  profile: string;
+  golden_total: number;
+  golden_passed: number;
+  markdown: string;
+  html: string;
+  body_sha256: string;
 }
-
 export interface Health {
   status: string;
   version: string;
   commit: string;
 }
+
+
