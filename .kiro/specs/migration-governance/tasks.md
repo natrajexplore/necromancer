@@ -8,7 +8,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7_
 - [x] 4. Gate G4 over ProofResult + golden-flow results, including the budget check and the unhit-rule warnings
   - _Requirements: 1.5_
-- [ ] 5. Verdict computation, waiver expiry, four-eyes rule, forbidden-words test
+- [x] 5. Verdict computation, waiver expiry, four-eyes rule, forbidden-words test
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
 - [ ] 6. Audit header + determinism test (PBT P11 on the report body)
   - _Requirements: 3.1, 3.2, 3.3_

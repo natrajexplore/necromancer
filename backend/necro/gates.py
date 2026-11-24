@@ -18,11 +18,12 @@ from typing import Literal
 
 from necro.emitters.panos import PanosEmission
 from necro.findings import Finding, Severity
-from necro.gate_models import Check, GateId, GateResult, Sidecar, Waiver
+from necro.gate_models import AuditHeader, Check, GateId, GateResult, Sidecar, Verdict, Waiver
 from necro.ir import Dialect, Flow, LedgerClass, Policy, PolicyMode
 from necro.ledger import Approval, LedgerEntry
 from necro.proof_types import ContextProof, Counterexample, GoldenResult, ProofResult
 from necro.validate_panos import Validation
+from necro.verdict import compute_verdict
 
 MIN_CONFIDENCE = 0.9
 CI_BUDGET = 5_000  # examples per context; equals necro.oracle.PROFILE_BUDGETS["ci"]
@@ -326,3 +327,35 @@ def gate_g4(proof: ProofResult | None, golden: GoldenResult | None = None) -> Ga
             detail = _divergence(proof.counterexample)
         checks.append(_error("g4-divergence", detail))
     return result("G4", checks)
+
+
+# -- all gates ---------------------------------------------------------------------------------
+
+
+def evaluate(
+    policy: Policy,
+    findings: Sequence[Finding],
+    emission: PanosEmission | None,
+    validation: Validation,
+    proof: ProofResult | None,
+    ledger: Sequence[LedgerEntry],
+    sidecar: Sidecar,
+    today: date,
+    *,
+    golden: GoldenResult | None = None,
+    audit: AuditHeader | None = None,
+) -> Verdict:
+    """Run G1-G6 and compute the verdict. Pure: ``today`` is passed in for waiver expiry.
+
+    ``ledger`` is the ledger of the candidate being judged: the emitter's for the baseline, the
+    tightening ledger for a tightened candidate (requirement R1: separate artifacts).
+    """
+    results = [
+        gate_g1(policy),
+        gate_g2(policy, emission, sidecar, today),
+        gate_g3(validation),
+        gate_g4(proof, golden),
+        gate_g5(ledger, sidecar, today),
+        gate_g6(findings, sidecar, today),
+    ]
+    return compute_verdict(results, sidecar.change, audit)
