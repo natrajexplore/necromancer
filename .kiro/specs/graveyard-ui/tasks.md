@@ -1,6 +1,6 @@
 # Implementation Plan: graveyard-ui
 
-- [ ] 1. Vite + React + TS + Tailwind scaffold, design tokens, self-hosted fonts, reduced-motion utility
+- [x] 1. Vite + React + TS + Tailwind scaffold, design tokens, self-hosted fonts, reduced-motion utility
   - _Requirements: 6.1_
 - [ ] 2. API client (React Query) for exhume/autopsy/resurrect/prove/grimoire
   - _Requirements: 1.2_

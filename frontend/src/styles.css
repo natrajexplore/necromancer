@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* Tokens from .kiro/steering/haunted-ui.md; src/theme/tokens.ts mirrors them (checked by a test). */
+@theme {
+  --color-void: #0b0a10;
+  --color-crypt: #16141d;
+  --color-stone: #2a2733;
+  --color-bone: #e9e4d8;
+  --color-ash: #b3ad9f;
+  --color-spectral: #7cf5b0;
+  --color-blood: #e5484d;
+  --color-candle: #f5b74a;
+
+  --font-display: "IM Fell English SC", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-void);
+    color: var(--color-bone);
+    font-family: var(--font-sans);
+    color-scheme: dark;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-spectral);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background-color: var(--color-spectral);
+    color: var(--color-void);
+  }
+}
+
+/* Fog drift and candle flicker: subtle, decorative, and off under reduced motion. */
+@keyframes fog-drift {
+  from {
+    transform: translateX(-12%);
+  }
+  to {
+    transform: translateX(12%);
+  }
+}
+
+@keyframes candle-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  45% {
+    opacity: 0.86;
+  }
+  55% {
+    opacity: 0.94;
+  }
+}
+
+.fog-bank {
+  background: radial-gradient(ellipse at center, rgb(233 228 216 / 0.07), transparent 70%);
+  animation: fog-drift 38s ease-in-out infinite alternate;
+}
+
+.candle {
+  animation: candle-flicker 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
