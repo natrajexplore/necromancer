@@ -33,7 +33,7 @@ jobs:
   backend:
     name: Backend (ruff, mypy, pytest, PBT, golden flows, pip-audit)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: backend
@@ -67,17 +67,9 @@ jobs:
         if: hashFiles('backend/pyproject.toml') != ''
         env:
           HYPOTHESIS_PROFILE: ci
-        # pytest exits 5 when no test is marked pbt. That is tolerated only until necro-engine
-        # task 2.1 (the first property, P9) is ticked; after that, "no PBT tests" fails the build.
-        run: |
-          set +e
-          uv run pytest -q -m pbt
-          rc=$?
-          if [ "$rc" -eq 5 ] && grep -q '^- \[ \] 2\.1 ' ../.kiro/specs/necro-engine/tasks.md; then
-            echo "::warning::No PBT tests yet (necro-engine task 2.1 not done)"
-            exit 0
-          fi
-          exit "$rc"
+        # Full 5,000-example budget per property, spread over the runner's CPUs with pytest-xdist
+        # (budgets are never lowered to save time). "No PBT tests" (exit 5) fails the build.
+        run: uv run --with pytest-xdist==3.6.1 pytest -q -m pbt -n auto
       - name: Golden flows
         if: hashFiles('backend/tests/test_golden_flows.py') != ''
         run: uv run pytest -q tests/test_golden_flows.py

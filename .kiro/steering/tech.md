@@ -29,7 +29,7 @@ inclusion: always
 
 ## CI (`.github/workflows/ci.yml`)
 On every push and PR: `ruff check`, `ruff format --check`, `mypy --strict necro`, `pytest` (dev profile) with coverage,
-`pytest -m pbt` with `HYPOTHESIS_PROFILE=ci`, golden flows, `pip-audit`, frontend `npm ci && npm run build && npm test`,
+`pytest -m pbt -n auto` (pytest-xdist, full budget) with `HYPOTHESIS_PROFILE=ci`, golden flows, `pip-audit`, frontend `npm ci && npm run build && npm test`,
 `npm audit --audit-level=high`.
 The workflow already exists. Its `repo-integrity` job runs `.github/scripts/check_repo.py` (`.kiro` JSON validity, `.kiro`
 never git-ignored, spec traceability, sample annotations, synthetic IPs, golden-flow schema). Backend and frontend steps
