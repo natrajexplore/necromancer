@@ -59,3 +59,9 @@
 - What Kiro did: Built the Autopsy engine (box-algebra shadowed/redundant plus nine other finding types, zone-trust severity), confirmed via decide(), 100% recall on seeded GHOST lines.
 - What the human corrected: Nothing this session; Kiro found and fixed an undefined-ACL fixture in its own test and flagged an evaluator same-security gap for a follow-up.
 - Kiro feature used: specs, hooks, steering, PBT
+
+## 2026-11-21 — CLI
+- Spec task(s): necro-engine/6.1, 6.2, 6.3, 6.4, 6.5, 6.6
+- What Kiro did: Built the PAN-OS emitter, exorcism ledger and reader, and ran generated-policy equivalence checks that found and fixed three emitter bugs.
+- What the human corrected: Nothing this session; Kiro dropped the Hypothesis deadline on the P3 tests after a timing failure under coverage.
+- Kiro feature used: specs, hooks, steering, PBT
