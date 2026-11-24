@@ -1,6 +1,6 @@
 # Implementation Plan: migration-governance
 
-- [ ] 1. Models: `Waiver`, `ChangeMeta`, `Sidecar` (JSON + TOML loaders), `Check`, `GateResult`, `Verdict`, `AuditHeader`
+- [x] 1. Models: `Waiver`, `ChangeMeta`, `Sidecar` (JSON + TOML loaders), `Check`, `GateResult`, `Verdict`, `AuditHeader`
   - _Requirements: 2.2, 2.3, 3.1, 6.2_
 - [ ] 2. `validate_panos.py` static checks (gate G3) with error/warning split
   - _Requirements: 1.4_
