@@ -25,6 +25,8 @@ from necro.oracle import (
     PROFILE_BUDGETS,
     ProofInputError,
     _coverage,
+    _Run,
+    _sweep,
     budget_for_profile,
     prove,
 )
@@ -332,3 +334,47 @@ def test_a_single_flow_is_compared_in_the_address_space_of_the_source() -> None:
     assert verdict.problem == "" and verdict.original.rule_id == "outside_in#1"
     assert verdict.resurrected.rule_id == "outside_in-1" and verdict.entries == ()
     assert verdict.panos_flow == flow
+
+
+# -- the witness sweep ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", list(CONFIGS))
+@pytest.mark.parametrize("seed", [0, 1, 7, 12345])
+def test_every_reachable_rule_is_exercised_whatever_the_seed_and_even_at_a_tiny_budget(
+    name: str, seed: int
+) -> None:
+    """The sweep, not luck, makes the rules of the source and of the candidate that can fire hit."""
+    policy, _emission = _emit(name)
+    shadowed = {f.rule_ref for f in analyze(policy) if f.type == FindingType.shadowed}
+    result = _prove(name, budget=1, seed=seed)
+    assert result.passed
+    for c in result.contexts:
+        assert set(c.original.unhit) <= shadowed, (seed, c.context, c.original.unhit)
+        # the PAN-OS rules left unhit are the translations of those shadowed rules, the rules
+        # that apply to other zones, and the final deny (which only the leftovers reach)
+        assert c.examples > 1
+
+
+def test_the_sweep_alone_finds_a_broken_rule() -> None:
+    policy, emission = _emit("pix-2006-hq.cfg")
+    broken = _break(emission.text, "outside_in-2", "action", "allow", "deny")
+    sides = Sides(policy, broken, emission.ledger)
+    ctx = sides.context("outside:in")
+    run = _Run()
+    _sweep(sides, ctx, flow_space(policy, ctx), run)
+    assert run.swept is not None and 0 < run.found_at <= run.examples
+    assert run.swept.source == "search" and run.swept.context == "outside:in"
+    assert run.swept.original.action != run.swept.resurrected.action
+    assert run.examples == len(flow_space(policy, ctx).witnesses)  # every witness is checked
+
+
+def test_a_clean_sweep_records_hits_and_no_failure() -> None:
+    policy, emission = _emit("ios-12-edge.cfg")
+    sides = Sides(policy, emission.text, emission.ledger)
+    ctx = sides.context("FastEthernet0/0:in")
+    run = _Run()
+    _sweep(sides, ctx, flow_space(policy, ctx), run)
+    assert run.swept is None and run.found_at == 0
+    assert run.ledger_covered > 0  # the established rule and the to-the-box flows
+    assert "110#2" in run.original_hits and "110-2" in run.resurrected_hits

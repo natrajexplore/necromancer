@@ -9,12 +9,16 @@ The proof runs in this order:
 
 1. The golden flows (hand-verified vectors) run first. If one fails, it is the counterexample and
    the search is skipped.
-2. For each context, Hypothesis searches ``budget`` boundary-biased flows (``oracle_flows``) with
+2. For each context, every *witness* flow (a corner of the region that reaches each rule, plus the
+   corners of the rules that are not reached) is checked once. This sweep is deterministic, so
+   each rule of the source and of the candidate that can fire is exercised whatever the seed, and
+   it does not count against ``budget``.
+3. Then Hypothesis searches ``budget`` boundary-biased flows (``oracle_flows``) with
    ``hypothesis.target()`` steering toward flows that sit on several boundaries at once. The
    search is seeded, so the same input, budget and seed give the same result.
-3. A divergence is shrunk by Hypothesis. The result carries the shrunk flow, the context, both
+4. A divergence is shrunk by Hypothesis. The result carries the shrunk flow, the context, both
    decisions with rule ids and egress zones, and the ledger entries that apply.
-4. A passing context reports its example count, the share of active rules hit on each side, and the
+5. A passing context reports its example count, the share of active rules hit on each side, and the
    rules that were not hit.
 
 The budget is per context. The caps and profiles match the security steering: 500 / 5,000 /
@@ -36,7 +40,7 @@ from necro.golden import GoldenVector, check_golden
 from necro.ir import Context, Policy, Rule
 from necro.ledger import LedgerEntry
 from necro.oracle_core import ProofInputError, Sides
-from necro.oracle_flows import flow_space, flow_strategy
+from necro.oracle_flows import FlowSpace, flow_space, flow_strategy
 from necro.parsers.panos_reader import RULEBASE
 from necro.proof_types import ContextProof, Counterexample, ProofResult, SideCoverage
 
@@ -79,6 +83,7 @@ class _Run:
     ledger_covered: int = 0
     found_at: int = 0
     failure: Counterexample | None = None
+    swept: Counterexample | None = None  # first divergence of the sweep, if any
     original_hits: set[str] = field(default_factory=set)
     resurrected_hits: set[str] = field(default_factory=set)
 
@@ -100,10 +105,25 @@ def _coverage(ids: list[str], hits: set[str]) -> SideCoverage:
     )
 
 
+def _sweep(sides: Sides, ctx: Context, space: FlowSpace, run: _Run) -> None:
+    """Check every witness once. A divergence is kept, and the search that follows shrinks it."""
+    for flow in space.witnesses:
+        run.examples += 1
+        verdict = sides.check(ctx, flow)
+        run.original_hits.add(verdict.original.rule_id)
+        run.resurrected_hits.add(verdict.resurrected.rule_id)
+        if verdict.entries:
+            run.ledger_covered += 1
+        if verdict.problem and run.swept is None:
+            run.found_at = run.examples
+            run.swept = sides.counterexample("search", ctx, flow, verdict, verdict.problem)
+
+
 def _search(sides: Sides, ctx: Context, budget: int, seed_value: int) -> ContextProof:
     space = flow_space(sides.original, ctx)
     flows = flow_strategy(space)
     run = _Run()
+    _sweep(sides, ctx, space, run)
 
     def prop(data: st.DataObject) -> None:
         boundaries = 0.0
@@ -117,7 +137,7 @@ def _search(sides: Sides, ctx: Context, budget: int, seed_value: int) -> Context
             if verdict.entries:
                 run.ledger_covered += 1
             if verdict.problem:
-                if run.failure is None:
+                if run.failure is None and run.swept is None:
                     run.found_at = run.examples
                 run.failure = sides.counterexample("search", ctx, flow, verdict, verdict.problem)
                 raise _Divergence
@@ -138,6 +158,7 @@ def _search(sides: Sides, ctx: Context, budget: int, seed_value: int) -> Context
     with contextlib.suppress(_Divergence):
         search()
 
+    failure = run.failure or run.swept  # the search shrinks; the sweep only finds
     zone = sides.zones.of_context(sides.original, ctx)
     acl_rules = [
         r for name in (ctx.acl_name, ctx.global_acl_name) for r in sides.original.acls.get(name, [])
@@ -147,11 +168,11 @@ def _search(sides: Sides, ctx: Context, budget: int, seed_value: int) -> Context
         context=ctx.name,
         implicit=not ctx.acl_name and not ctx.global_acl_name,
         examples=run.found_at or run.examples,
-        passed=run.failure is None,
+        passed=failure is None,
         original=_coverage(_active_ids(acl_rules), run.original_hits),
         resurrected=_coverage(_active_ids(panos_rules, zone), run.resurrected_hits),
         ledger_covered=run.ledger_covered,
-        counterexample=run.failure,
+        counterexample=failure,
     )
 
 
