@@ -91,6 +91,11 @@ def _tokenize(line: str, line_no: int) -> list[Token]:
     return tokens
 
 
+def tokenize(line: str, line_no: int = 0) -> list[Token]:
+    """Public name of the tokenizer, shared with ``validate_panos`` so both read lines alike."""
+    return _tokenize(line, line_no)
+
+
 def _words(token: Token) -> list[str]:
     return [token] if isinstance(token, str) else token
 

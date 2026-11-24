@@ -2,7 +2,7 @@
 
 - [x] 1. Models: `Waiver`, `ChangeMeta`, `Sidecar` (JSON + TOML loaders), `Check`, `GateResult`, `Verdict`, `AuditHeader`
   - _Requirements: 2.2, 2.3, 3.1, 6.2_
-- [ ] 2. `validate_panos.py` static checks (gate G3) with error/warning split
+- [x] 2. `validate_panos.py` static checks (gate G3) with error/warning split
   - _Requirements: 1.4_
 - [ ] 3. Gates G1, G2, G5, G6 over policy, coverage, ledger and findings
   - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7_
