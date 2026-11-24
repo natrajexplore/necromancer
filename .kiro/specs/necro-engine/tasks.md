@@ -82,7 +82,7 @@
 - [ ] 9. Interfaces
 - [ ] 9.1 Grimoire report (see migration-governance tasks)
   - _Requirements: 7.1_
-- [ ] 9.2 FastAPI `/v1` endpoints + `/healthz` + mangum handler + limits + structured errors + security headers
+- [x] 9.2 FastAPI `/v1` endpoints + `/healthz` + mangum handler + limits + structured errors + security headers
   - _Requirements: 7.2, 7.5_
 - [ ] 9.3 MCP server (`FastMCP`, stdio) with tools exhume/autopsy/resurrect/prove/gate; register in `.kiro/settings/mcp.json` and set `"disabled": false` (it stays disabled until this task)
   - _Requirements: 7.3_
