@@ -1,4 +1,4 @@
-# Implementation Plan: necro-engine
+﻿# Implementation Plan: necro-engine
 
 ## Phase 1: hackathon MVP (due 2026-11-30)
 
@@ -13,9 +13,9 @@
   - _Requirements: 2.2_
 - [x] 2.2 `ir.py`: `Match`, `Rule`, `Interface`, `Route`, `NatRule`, `Binding`, `Context`, `MgmtAccess`, `LineRecord`, `Policy`, `Flow`, `Decision`
   - _Requirements: 2.1_
-- [x] 2.3 `masks.py`: subnet ↔ wildcard conversion, rejecting non-contiguous masks; PBT P7
+- [x] 2.3 `masks.py`: subnet â†” wildcard conversion, rejecting non-contiguous masks; PBT P7
   - _Requirements: 1.1, 1.2, 1.12_
-- [x] 2.4 `names.py`: (protocol, name) tables from policy-semantics §4, with unit tests for the 514/512/radius traps
+- [x] 2.4 `names.py`: (protocol, name) tables from policy-semantics Â§4, with unit tests for the 514/512/radius traps
   - _Requirements: 1.10_
 - [x] 2.5 `redact.py`: every pattern in security steering; PBT P10 over generated configs
   - _Requirements: 1.6_
@@ -39,7 +39,7 @@
   - _Requirements: 1.3_
 - [x] 4.4 `coverage.py`: classify every line; PBT P14
   - _Requirements: 1.9_
-- [x] 4.5 Renderer per dialect (IR → text) and PBT P1 round-trip
+- [x] 4.5 Renderer per dialect (IR â†’ text) and PBT P1 round-trip
   - _Requirements: 1.8_
 - [x] 4.6 `tests/test_golden_flows.py` for PIX, ASA 8.2 and IOS vectors (original side)
   - _Requirements: 2.7_
@@ -52,7 +52,7 @@
   - _Requirements: 3.3, 3.4, 3.5, 3.6, 3.8, 3.9, 3.10, 3.13, 3.14_
 
 - [x] 6. PAN-OS emitter + reader
-- [x] 6.1 Zones, objects, groups, services (neq → two ranges), rules in order, implicit-permit rules, explicit final deny; `panos_names.py`; PBT P12
+- [x] 6.1 Zones, objects, groups, services (neq â†’ two ranges), rules in order, implicit-permit rules, explicit final deny; `panos_names.py`; PBT P12
   - _Requirements: 4.1, 4.2, 4.4, 4.6, 4.8_
 - [x] 6.2 To-zone per rule with splitting
   - _Requirements: 4.5_
@@ -65,7 +65,7 @@
 - [x] 6.6 Determinism test; PBT P11
   - _Requirements: 4.14_
 
-- [ ] 7. Tightening + exorcism ledger
+- [x] 7. Tightening + exorcism ledger
   - Remediations from findings, ledger entries with approval state, separate baseline/tightened artifacts; PBT P6
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
@@ -91,9 +91,9 @@
 
 ## Phase 2: enterprise hardening
 
-- [ ] 10. ASA 8.3–9.x (`asa_objects.py`): object network/service, object NAT, twice NAT (static), any4, global ACL; golden flows `asa-9.8-dc.toml`; PBT P13
+- [ ] 10. ASA 8.3â€“9.x (`asa_objects.py`): object network/service, object NAT, twice NAT (static), any4, global ACL; golden flows `asa-9.8-dc.toml`; PBT P13
   - _Requirements: 1.13, 2.6, 4.12_
-- [ ] 11. Time-range → PAN-OS schedule objects
+- [ ] 11. Time-range â†’ PAN-OS schedule objects
   - _Requirements: 4.13_
 - [ ] 12. Hit-count ingestion (`show access-list`) and zero-hit findings; correlated-rule findings
   - _Requirements: 1.14, 3.11, 3.12_
