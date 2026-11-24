@@ -89,3 +89,45 @@
 - What Kiro did: Added the /v1 API with limits and headers, the FastMCP stdio server and the necro CLI over one shared service layer; pinned mcp<2 for FastMCP.
 - What the human corrected: Nothing yet; writes to .kiro/settings/mcp.json were denied, so 9.3 registration is pending.
 - Kiro feature used: specs, hooks, steering, MCP
+
+## 2026-11-24 — CLI
+- Spec task(s): migration-governance/6-9, necro-engine/9.1 (not started)
+- What Kiro did: Found that governance tasks 1-5 (models, gates, verdict) do not exist, so 6-9 and 9.1 are blocked; asked which option to take instead of changing code.
+- What the human corrected: Nothing yet; waiting for the scope decision.
+- Kiro feature used: specs, agent
+
+## 2026-11-24 — CLI
+- Spec task(s): migration-governance/6-9, necro-engine/9.1 (not started)
+- What Kiro did: Found uncommitted gate_models.py and its tests from another running session (governance task 1) and stopped to avoid colliding with its work.
+- What the human corrected: Nothing yet; waiting for which session owns governance 1-5.
+- Kiro feature used: specs, agent
+
+## 2026-11-24 — CLI
+- Spec task(s): graveyard-ui/1, graveyard-ui/2, graveyard-ui/3
+- What Kiro did: Built frontend/ (Vite + React 18 + TS + Tailwind 4): tokens with a WCAG AA test, OFL fonts, reduced motion, React Query API client, and the Graveyard screen with unquiet lines; checked it against the live backend.
+- What the human corrected: Nothing; the push also published another session's unpushed governance commits after their checks passed.
+- Kiro feature used: specs, steering, hooks
+
+## 2026-11-24 — CLI
+- Spec task(s): graveyard-ui/4-7 (not started)
+- What Kiro did: Mapped the screens to the v1 API and found gaps (rule lists, zone map, tighten endpoint, haunt option, gate/grimoire still 501); proposed the backend additions and asked before editing files the governance session also edits.
+- What the human corrected: Nothing yet; waiting on two decisions (shared backend edits, task 7 timing).
+- Kiro feature used: specs, steering
+
+## 2026-11-24 — CLI
+- Spec task(s): graveyard-ui/7 (status check)
+- What Kiro did: Confirmed task 7 is not done or started: graveyard-ui 4-7 and governance 5-9 are unticked, and /v1/gate and /v1/grimoire still return 501.
+- What the human corrected: Nothing; asked for status only.
+- Kiro feature used: specs
+
+## 2026-11-24 — CLI
+- Spec task(s): graveyard-ui/4-7 (on hold)
+- What Kiro did: Put graveyard-ui task 7 on hold until governance tasks 7-9 land; tasks 4-6 also held pending OK for shared backend edits.
+- What the human corrected: Chose to wait for task 7 instead of building it unticked.
+- Kiro feature used: specs
+
+## 2026-11-24 — CLI
+- Spec task(s): migration-governance/1-5
+- What Kiro did: Built governance models, G3 PAN-OS static checks, gates G1-G6 and the verdict (waiver expiry, four-eyes, forbidden-words test); pushed 5 commits.
+- What the human corrected: Nothing; Kiro's own fixes were the service-group fixture syntax, dropping themed finding labels from gate text, and waiting for the coverage run before editing.
+- Kiro feature used: agent (gatekeeper), specs, steering, hooks, PBT
