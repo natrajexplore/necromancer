@@ -161,3 +161,9 @@
 - What Kiro did: Explained that kiro-cli chat --agent oracle is interactive and cannot run from this session, and offered to call the oracle agent with a concrete task.
 - What the human corrected: Nothing.
 - Kiro feature used: agent (oracle, offered)
+
+## 2026-11-24 — CLI
+- Spec task(s): graveyard-ui/6 (requirement 4.3)
+- What Kiro did: Added haunt to prove (service, API, CLI, MCP) using a new fixed mutant because no existing one fails on all samples; gate and grimoire refuse it; 2062 backend and 85 UI tests green; pushed dfc04f6.
+- What the human corrected: The human scoped the work (journal first, refuse haunt on gates, exact checks); Kiro flagged that the 'existing mutant' requirement could not hold on every sample.
+- Kiro feature used: specs, hooks, steering, PBT
