@@ -4,7 +4,7 @@
   - _Requirements: 2.2, 2.3, 3.1, 6.2_
 - [x] 2. `validate_panos.py` static checks (gate G3) with error/warning split
   - _Requirements: 1.4_
-- [ ] 3. Gates G1, G2, G5, G6 over policy, coverage, ledger and findings
+- [x] 3. Gates G1, G2, G5, G6 over policy, coverage, ledger and findings
   - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7_
 - [ ] 4. Gate G4 over ProofResult + golden-flow results, including the budget check and the unhit-rule warnings
   - _Requirements: 1.5_
