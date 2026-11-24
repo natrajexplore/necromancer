@@ -30,13 +30,15 @@ from dataclasses import dataclass
 
 from hypothesis import strategies as st
 
-from necro.boxes import effective_regions
+from necro.boxes import Box, effective_regions
 from necro.ir import Context, Flow, Policy
 from necro.names import all_icmp_types, all_named_ports
+from necro.nat import NatModel
 from necro.sets import AddrSet, PortSet
 
 _MAX_ADDR = 0xFFFFFFFF
 _MAX_WITNESSES = 2_000
+_SPECIAL_WITNESS_RULES = 300  # larger ACLs only get the plain corners, to stay linear
 _EXTRA_PROTOCOLS = (47, 50, 88, 89)
 _FIXED_PORTS = (0, 1, 1023, 1024, 65535)
 _WITNESS_SHARE = 2  # of 10 draws: a witness as it is
@@ -109,21 +111,70 @@ def _address_sets(policy: Policy) -> list[AddrSet]:
     return sets
 
 
-def _witnesses(policy: Policy, ctx: Context, uses_established: bool) -> tuple[Flow, ...]:
+def _special_addresses(policy: Policy, ctx: Context) -> list[ipaddress.IPv4Address]:
+    """Addresses whose handling differs from the rest, most relevant first.
+
+    A flow only reaches some rules with one of these as its source or destination: a PIX drops a
+    flow that has no translation (so the translation space of the ingress interface comes first),
+    and an address of the box is answered by the management profile instead of the ACL.
+    """
+    ordered: list[int] = []
+    sources, destinations = NatModel(policy).translation_space(ctx.interface)
+    for addrs in (destinations, sources):
+        for iv in addrs.intervals:
+            ordered += [iv.lo, iv.hi]
+    ordered += [int(i.ip_address.ip) for i in policy.interfaces if i.ip_address is not None]
+    for nat in policy.nat_rules:
+        for addrs in (nat.real_addr, nat.mapped_addr):
+            for iv in addrs.intervals:
+                ordered += [iv.lo, iv.hi]
+    return [ipaddress.IPv4Address(a) for a in dict.fromkeys(ordered)]
+
+
+def _addresses_in(box: Box, index: int, special: list[ipaddress.IPv4Address]) -> list[AddrSet]:
+    """Up to four special addresses inside the source (0) or destination (1) of ``box``."""
+    dim = box.dims[index]
+    assert isinstance(dim, AddrSet)
+    return [AddrSet.from_host(a) for a in special if dim.contains(a)][:4]
+
+
+def _variants(piece: Box, special: list[ipaddress.IPv4Address]) -> list[Box]:
+    """``piece`` itself, and ``piece`` narrowed to a few special sources and destinations."""
+    sources: list[AddrSet | None] = [None, *_addresses_in(piece, 0, special)]
+    targets: list[AddrSet | None] = [None, *_addresses_in(piece, 1, special)]
+    boxes: list[Box] = []
+    for src in sources:
+        for dst in targets:
+            narrowed = piece if src is None else piece.restrict(0, src)
+            if narrowed is not None and dst is not None:
+                narrowed = narrowed.restrict(1, dst)
+            if narrowed is not None:
+                boxes.append(narrowed)
+    return boxes
+
+
+def _witnesses(
+    policy: Policy, ctx: Context, uses_established: bool, special: list[ipaddress.IPv4Address]
+) -> tuple[Flow, ...]:
     """Flows that reach each rule of the context's ACLs, in rule order, without repeats (capped).
 
-    The ``established`` flag only exists on IOS, so other policies get it cleared.
+    Each piece of a rule's region gives its corners and, for ACLs of moderate size, the same
+    corners with a special address as source or destination. The ``established`` flag only exists
+    on IOS, so other policies get it cleared.
     """
     flows: dict[tuple[object, ...], Flow] = {}
     for name in (ctx.acl_name, ctx.global_acl_name):
         if not name:
             continue
-        for _rule, pieces in effective_regions(policy.acls.get(name, [])):
+        rules = policy.acls.get(name, [])
+        use_special = len(rules) <= _SPECIAL_WITNESS_RULES
+        for _rule, pieces in effective_regions(rules):
             for piece in pieces[:2]:
-                for flow in piece.witnesses():
-                    if flow.established and (flow.proto != 6 or not uses_established):
-                        flow = flow.model_copy(update={"established": False})
-                    flows.setdefault(tuple(flow.__dict__.values()), flow)
+                for box in _variants(piece, special) if use_special else [piece]:
+                    for flow in box.witnesses():
+                        if flow.established and (flow.proto != 6 or not uses_established):
+                            flow = flow.model_copy(update={"established": False})
+                        flows.setdefault(tuple(flow.__dict__.values()), flow)
         if len(flows) >= _MAX_WITNESSES:
             break
     return tuple(list(flows.values())[:_MAX_WITNESSES])
@@ -153,7 +204,7 @@ def flow_space(policy: Policy, ctx: Context) -> FlowSpace:
         icmp_types=(None, *icmp_pool),
         boundary_icmp=frozenset(boundary_icmp),
         protocols=tuple(protocols),
-        witnesses=_witnesses(policy, ctx, uses_established),
+        witnesses=_witnesses(policy, ctx, uses_established, _special_addresses(policy, ctx)),
         uses_established=uses_established,
     )
 
