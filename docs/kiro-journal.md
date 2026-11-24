@@ -143,3 +143,9 @@
 - What Kiro did: Built the audit header, one-pass assessment, Grimoire (Markdown + HTML, 10 sections, P11 tests), runbook with per-sample snapshots, and wired /v1/gate, /v1/grimoire, necro gate and MCP gate; 5 commits, each staged and checked alone (2036 tests, 98.7% coverage).
 - What the human corrected: Nothing; Kiro found and fixed an MCP hang (git_commit() let git inherit the protocol stdin) and a runbook that hid golden flows the candidate contradicts.
 - Kiro feature used: agent (gatekeeper), specs, steering, hooks, MCP, PBT
+
+## 2026-11-24 — CLI
+- Spec task(s): migration-governance/6-9, necro-engine/9.1, 9.3 (wrap-up)
+- What Kiro did: Pushed the 7 commits (68ad676..ed290c4) to origin/main and reported the results and the deviations (commit order 8 before 6, P11 split across tasks 6 and 7).
+- What the human corrected: Nothing.
+- Kiro feature used: hooks, specs
