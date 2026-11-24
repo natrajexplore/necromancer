@@ -167,3 +167,9 @@
 - What Kiro did: Added haunt to prove (service, API, CLI, MCP) using a new fixed mutant because no existing one fails on all samples; gate and grimoire refuse it; 2062 backend and 85 UI tests green; pushed dfc04f6.
 - What the human corrected: The human scoped the work (journal first, refuse haunt on gates, exact checks); Kiro flagged that the 'existing mutant' requirement could not hold on every sample.
 - Kiro feature used: specs, hooks, steering, PBT
+
+## 2026-11-24 — CLI
+- Spec task(s): graveyard-ui/6 (follow-up)
+- What Kiro did: Fixed the flaky haunt Grimoire test by injecting the P11 NOW clock into assess(now=...), comparing verdict, body hash, Markdown and HTML byte for byte; checked other tests for the same race; pushed 75d3faa.
+- What the human corrected: The human reported the CI failure and required the fix not weaken the comparison.
+- Kiro feature used: hooks, PBT, steering
