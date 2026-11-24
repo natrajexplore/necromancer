@@ -10,7 +10,7 @@
   - _Requirements: 1.5_
 - [x] 5. Verdict computation, waiver expiry, four-eyes rule, forbidden-words test
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
-- [ ] 6. Audit header + determinism test (PBT P11 on the report body)
+- [x] 6. Audit header + determinism test (PBT P11 on the report body)
   - _Requirements: 3.1, 3.2, 3.3_
 - [ ] 7. Grimoire Markdown + HTML: all sections in order, zone mapping, zone-to-zone matrix, rule inventory with justification, control mapping, secret-rotation advice
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
