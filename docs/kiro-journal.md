@@ -149,3 +149,15 @@
 - What Kiro did: Pushed the 7 commits (68ad676..ed290c4) to origin/main and reported the results and the deviations (commit order 8 before 6, P11 split across tasks 6 and 7).
 - What the human corrected: Nothing.
 - Kiro feature used: hooks, specs
+
+## 2026-11-24 — CLI
+- Spec task(s): graveyard-ui/4, 5, 6, 7
+- What Kiro did: Built the Autopsy, Resurrection, Proof of Life and Verdict screens (85 UI tests, build green) and pushed commit 7a81238; found the engine has no haunt, tightening or redacted-source support and made the UI say so.
+- What the human corrected: Nothing.
+- Kiro feature used: specs, hooks, steering
+
+## 2026-11-24 — CLI
+- Spec task(s): none (vibe)
+- What Kiro did: Explained that kiro-cli chat --agent oracle is interactive and cannot run from this session, and offered to call the oracle agent with a concrete task.
+- What the human corrected: Nothing.
+- Kiro feature used: agent (oracle, offered)
