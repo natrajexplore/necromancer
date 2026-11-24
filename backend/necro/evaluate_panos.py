@@ -22,7 +22,14 @@ RuleMatcher = Callable[[Flow, Rule], bool]
 def decide_panos(
     policy: Policy, context: Context, flow: Flow, to_zone: str, matches: RuleMatcher
 ) -> Decision:
-    """First matching rule of the rulebase, or the management profile for traffic to the box."""
+    """First matching rule of the rulebase, or the management profile for traffic to the box.
+
+    When no rule matches, PAN-OS applies its two default rules (policy-semantics 6): traffic within
+    one zone is allowed (``intrazone-default``) and traffic between zones is denied
+    (``interzone-default``). The emitter ends the rulebase with an explicit deny so that the
+    result does not depend on them. Evaluating them here is what lets the oracle notice a
+    candidate config that lost that final deny.
+    """
     if to_zone == "self":
         return _decide_to_the_box(policy, flow)
     for rule in policy.acls.get(context.acl_name, []):
@@ -34,8 +41,18 @@ def decide_panos(
             continue
         if matches(flow, rule):
             return Decision(action=rule.action, rule_id=rule.id, to_zone=to_zone)
+    if to_zone == context.interface:
+        return Decision(
+            action=Action.permit,
+            rule_id="intrazone-default",
+            to_zone=to_zone,
+            reason="no rule matched; the PAN-OS default rule allows traffic within a zone",
+        )
     return Decision(
-        action=Action.deny, rule_id="implicit-deny", to_zone=to_zone, reason="no rule matched"
+        action=Action.deny,
+        rule_id="interzone-default",
+        to_zone=to_zone,
+        reason="no rule matched; the PAN-OS default rule denies traffic between zones",
     )
 
 

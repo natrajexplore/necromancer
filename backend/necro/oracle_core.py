@@ -28,7 +28,7 @@ from necro.emitters.panos_network import ZoneMap
 from necro.evaluate import decide
 from necro.ir import Action, Context, Decision, Flow, LedgerClass, Policy
 from necro.ledger import LedgerEntry
-from necro.nat import to_panos_space
+from necro.nat import to_panos_space, to_source_space
 from necro.parsers.panos_reader import read_panos
 from necro.proof_types import Counterexample
 
@@ -41,6 +41,7 @@ class ProofInputError(ValueError):
 class Verdict:
     """Both decisions for one flow and what the comparison concluded."""
 
+    flow: Flow  # in the source's address space: what ``decide(original)`` was asked
     original: Decision
     resurrected: Decision
     panos_flow: Flow
@@ -85,6 +86,7 @@ class Sides:
     ) -> Verdict:
         """Evaluate ``flow`` on both sides. ``panos_dst`` overrides the address mapping
         (a golden vector states the destination a PAN-OS rule must match)."""
+        flow = to_source_space(self.original, ctx, flow)
         original = decide(self.original, ctx, flow)
         if panos_dst is None:
             panos_flow = to_panos_space(self.original, ctx, flow)
@@ -96,6 +98,7 @@ class Sides:
         expected = next(iter(declared)) if len(declared) == 1 else original.action
         original_zone = self.zone_name(original.to_zone)
         return Verdict(
+            flow,
             original,
             resurrected,
             panos_flow,
@@ -109,7 +112,6 @@ class Sides:
         self,
         source: Literal["golden", "search"],
         ctx: Context,
-        flow: Flow,
         verdict: Verdict,
         reason: str,
         vector_id: str = "",
@@ -117,7 +119,7 @@ class Sides:
         return Counterexample(
             source=source,
             context=ctx.name,
-            flow=flow,
+            flow=verdict.flow,
             panos_flow=verdict.panos_flow,
             original=verdict.original,
             resurrected=verdict.resurrected,

@@ -41,6 +41,13 @@ RULEBASE = "rulebase"
 _ANY = "any"
 _PROTOCOLS = {"tcp": 6, "udp": 17}
 _DENY_ACTIONS = ("deny", "drop", "reset-client", "reset-server", "reset-both")
+# Predefined App-IDs for ICMP. They are broader than one ICMP type, so a rule that uses one is a
+# widening of an exact type match (policy-semantics 6). They are read as the broad matches they
+# are: ``ping`` is echo reply and echo request, ``icmp`` is every ICMP type (None).
+_PREDEFINED_ICMP_APPS: dict[str, frozenset[int] | None] = {
+    "ping": frozenset({0, 8}),
+    "icmp": None,
+}
 
 Token = str | list[str]
 
@@ -281,8 +288,16 @@ class _Reader:
         if services != [_ANY]:
             raise ParseError("unsupported-combination", f"{name} mixes applications and services")
         icmp_types: set[int] = set()
+        icmp_any = False
         protocols: list[int] = []
         for app in apps:
+            if app in _PREDEFINED_ICMP_APPS:
+                types = _PREDEFINED_ICMP_APPS[app]
+                if types is None:
+                    icmp_any = True
+                else:
+                    icmp_types |= types
+                continue
             if app not in self.apps:
                 raise ParseError("undefined-application", f"application {app!r} in {name}")
             kind, number = self.apps[app]
@@ -291,7 +306,9 @@ class _Reader:
             elif number not in protocols:
                 protocols.append(number)
         matches: list[Match] = []
-        if icmp_types and 1 not in protocols:
+        if icmp_any and 1 not in protocols:
+            matches.append(Match(src=src, dst=dst, proto=1))
+        elif icmp_types and 1 not in protocols:
             matches.append(Match(src=src, dst=dst, proto=1, icmp_types=frozenset(icmp_types)))
         matches += [Match(src=src, dst=dst, proto=n) for n in protocols]
         return matches

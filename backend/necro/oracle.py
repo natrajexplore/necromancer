@@ -10,13 +10,16 @@ The proof runs in this order:
 1. The golden flows (hand-verified vectors) run first. If one fails, it is the counterexample and
    the search is skipped.
 2. For each context, every *witness* flow (a corner of the region that reaches each rule, plus the
-   corners of the rules that are not reached) is checked once. This sweep is deterministic, so
-   each rule of the source and of the candidate that can fire is exercised whatever the seed, and
-   it does not count against ``budget``.
+   corners of the rules that are not reached) and every *probe* (a corner moved by one in one
+   field, just inside or just outside its region) is checked once. This sweep is deterministic,
+   so each rule of the source and of the candidate that can fire is exercised, and each range
+   edge is tested on both sides, whatever the seed. It does not count against ``budget``.
 3. Then Hypothesis searches ``budget`` boundary-biased flows (``oracle_flows``) with
    ``hypothesis.target()`` steering toward flows that sit on several boundaries at once. The
    search is seeded, so the same input, budget and seed give the same result.
-4. A divergence is shrunk by Hypothesis. The result carries the shrunk flow, the context, both
+4. A divergence the sweep finds is minimised field by field (``shrink_flow``) and the random search
+   of that context is skipped, since the context has failed. A divergence the search finds is
+   shrunk by Hypothesis. The result carries the shrunk flow, the context, both
    decisions with rule ids and egress zones, and the ledger entries that apply.
 5. A passing context reports its example count, the share of active rules hit on each side, and the
    rules that were not hit.
@@ -37,10 +40,10 @@ from hypothesis import seed as hypothesis_seed
 from hypothesis import strategies as st
 
 from necro.golden import GoldenVector, check_golden
-from necro.ir import Context, Policy, Rule
+from necro.ir import Context, Flow, Policy, Rule
 from necro.ledger import LedgerEntry
 from necro.oracle_core import ProofInputError, Sides
-from necro.oracle_flows import FlowSpace, flow_space, flow_strategy
+from necro.oracle_flows import FlowSpace, flow_space, flow_strategy, shrink_flow
 from necro.parsers.panos_reader import RULEBASE
 from necro.proof_types import ContextProof, Counterexample, ProofResult, SideCoverage
 
@@ -106,8 +109,8 @@ def _coverage(ids: list[str], hits: set[str]) -> SideCoverage:
 
 
 def _sweep(sides: Sides, ctx: Context, space: FlowSpace, run: _Run) -> None:
-    """Check every witness once. A divergence is kept, and the search that follows shrinks it."""
-    for flow in space.witnesses:
+    """Check every witness and probe once. A divergence is kept; the search then shrinks it."""
+    for flow in (*space.witnesses, *space.probes):
         run.examples += 1
         verdict = sides.check(ctx, flow)
         run.original_hits.add(verdict.original.rule_id)
@@ -116,14 +119,31 @@ def _sweep(sides: Sides, ctx: Context, space: FlowSpace, run: _Run) -> None:
             run.ledger_covered += 1
         if verdict.problem and run.swept is None:
             run.found_at = run.examples
-            run.swept = sides.counterexample("search", ctx, flow, verdict, verdict.problem)
+            run.swept = sides.counterexample("search", ctx, verdict, verdict.problem)
 
 
-def _search(sides: Sides, ctx: Context, budget: int, seed_value: int) -> ContextProof:
-    space = flow_space(sides.original, ctx)
+def _minimise(
+    sides: Sides, ctx: Context, space: FlowSpace, found: Counterexample
+) -> Counterexample:
+    """The simplest flow that still diverges the same way, starting from the one the sweep found.
+
+    "The same way" is the same reason (the same actions, zones and ledger basis). Without it a
+    smaller flow can fail for a different defect, and the counterexample would stop pointing at
+    the one that was found.
+    """
+
+    def fails(flow: Flow) -> bool:
+        return sides.check(ctx, flow).problem == found.reason
+
+    verdict = sides.check(ctx, shrink_flow(space, found.flow, fails))
+    return sides.counterexample("search", ctx, verdict, verdict.problem)
+
+
+def _random_search(
+    sides: Sides, ctx: Context, space: FlowSpace, run: _Run, budget: int, seed_value: int
+) -> None:
+    """Hypothesis searches ``budget`` boundary-biased flows and shrinks the first divergence."""
     flows = flow_strategy(space)
-    run = _Run()
-    _sweep(sides, ctx, space, run)
 
     def prop(data: st.DataObject) -> None:
         boundaries = 0.0
@@ -137,9 +157,9 @@ def _search(sides: Sides, ctx: Context, budget: int, seed_value: int) -> Context
             if verdict.entries:
                 run.ledger_covered += 1
             if verdict.problem:
-                if run.failure is None and run.swept is None:
+                if run.failure is None:
                     run.found_at = run.examples
-                run.failure = sides.counterexample("search", ctx, flow, verdict, verdict.problem)
+                run.failure = sides.counterexample("search", ctx, verdict, verdict.problem)
                 raise _Divergence
         target(boundaries / BATCH, label="boundaries")
 
@@ -158,7 +178,16 @@ def _search(sides: Sides, ctx: Context, budget: int, seed_value: int) -> Context
     with contextlib.suppress(_Divergence):
         search()
 
-    failure = run.failure or run.swept  # the search shrinks; the sweep only finds
+
+def _search(sides: Sides, ctx: Context, budget: int, seed_value: int) -> ContextProof:
+    space = flow_space(sides.original, ctx)
+    run = _Run()
+    _sweep(sides, ctx, space, run)
+    if run.swept is not None:  # this context already fails: minimise the flow, skip the search
+        run.failure = _minimise(sides, ctx, space, run.swept)
+    else:
+        _random_search(sides, ctx, space, run, budget, seed_value)
+    failure = run.failure
     zone = sides.zones.of_context(sides.original, ctx)
     acl_rules = [
         r for name in (ctx.acl_name, ctx.global_acl_name) for r in sides.original.acls.get(name, [])

@@ -25,12 +25,12 @@ about a dozen cheap draws. Pools are sorted, so Hypothesis shrinks toward the lo
 from __future__ import annotations
 
 import ipaddress
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from hypothesis import strategies as st
 
-from necro.boxes import Box, effective_regions
+from necro.boxes import KIND_ICMP, Box, boxes_of, effective_regions
 from necro.ir import Context, Flow, Policy
 from necro.names import all_icmp_types, all_named_ports
 from necro.nat import NatModel
@@ -38,6 +38,7 @@ from necro.sets import AddrSet, PortSet
 
 _MAX_ADDR = 0xFFFFFFFF
 _MAX_WITNESSES = 2_000
+_MAX_PROBES = 4_000  # one-field neighbours of the plain corners, checked once before the search
 _SPECIAL_WITNESS_RULES = 300  # larger ACLs only get the plain corners, to stay linear
 _EXTRA_PROTOCOLS = (47, 50, 88, 89)
 _FIXED_PORTS = (0, 1, 1023, 1024, 65535)
@@ -58,6 +59,8 @@ class FlowSpace:
     boundary_icmp: frozenset[int]
     protocols: tuple[int, ...]
     witnesses: tuple[Flow, ...]
+    corners: tuple[Flow, ...]  # the plain corners of the witnesses: no special-address variants
+    probes: tuple[Flow, ...]  # every corner moved by one in one field, in both directions
     uses_established: bool
 
     def score(self, flow: Flow) -> float:
@@ -154,30 +157,82 @@ def _variants(piece: Box, special: list[ipaddress.IPv4Address]) -> list[Box]:
 
 
 def _witnesses(
-    policy: Policy, ctx: Context, uses_established: bool, special: list[ipaddress.IPv4Address]
-) -> tuple[Flow, ...]:
-    """Flows that reach each rule of the context's ACLs, in rule order, without repeats (capped).
+    policy: Policy,
+    ctx: Context,
+    uses_established: bool,
+    special: list[ipaddress.IPv4Address],
+    icmp_types: tuple[int | None, ...],
+) -> tuple[tuple[Flow, ...], tuple[Flow, ...]]:
+    """Witnesses and corners of the context's ACLs, in rule order, without repeats (capped).
 
-    Each piece of a rule's region gives its corners and, for ACLs of moderate size, the same
-    corners with a special address as source or destination. The ``established`` flag only exists
-    on IOS, so other policies get it cleared.
+    The corners are the witnesses of the plain pieces: the lowest and the highest value of every
+    field of the region that reaches a rule (or of the rule's own match when it is not reached).
+    Witnesses add the variants described below.
+
+
+    * A rule that is reached gives the corners of its region and, for ACLs of moderate size, the
+      same corners with a special address as source or destination.
+    * A rule that is not reached (inactive, or shadowed by earlier rules) gives the corners of its
+      own match. They are decided by other rules in the source, so they expose a candidate that
+      enables a disabled rule or reorders rules.
+    * An ICMP rule also gives one flow per ICMP type, because the type is what the match is about
+      and what a widened application would change.
+
+    The ``established`` flag only exists on IOS, so other policies get it cleared.
     """
     flows: dict[tuple[object, ...], Flow] = {}
+    corners: dict[tuple[object, ...], Flow] = {}
+
+    def add(flow: Flow, *, corner: bool = False) -> None:
+        if flow.established and (flow.proto != 6 or not uses_established):
+            flow = flow.model_copy(update={"established": False})
+        key = tuple(flow.__dict__.values())
+        flows.setdefault(key, flow)
+        if corner:
+            corners.setdefault(key, flow)
+
     for name in (ctx.acl_name, ctx.global_acl_name):
         if not name:
             continue
         rules = policy.acls.get(name, [])
         use_special = len(rules) <= _SPECIAL_WITNESS_RULES
-        for _rule, pieces in effective_regions(rules):
-            for piece in pieces[:2]:
-                for box in _variants(piece, special) if use_special else [piece]:
-                    for flow in box.witnesses():
-                        if flow.established and (flow.proto != 6 or not uses_established):
-                            flow = flow.model_copy(update={"established": False})
-                        flows.setdefault(tuple(flow.__dict__.values()), flow)
+        regions = {rule.id: pieces for rule, pieces in effective_regions(rules)}
+        for rule in rules:
+            reached = regions.get(rule.id, [])
+            for piece in (reached or boxes_of(rule.match))[:2]:
+                for flow in piece.witnesses():
+                    add(flow, corner=True)
+                if reached and use_special:
+                    for box in _variants(piece, special)[1:]:
+                        for flow in box.witnesses():
+                            add(flow)
+                if piece.kind == KIND_ICMP:
+                    base = piece.witnesses()[0]
+                    for icmp_type in icmp_types:
+                        add(base.model_copy(update={"icmp_type": icmp_type}))
         if len(flows) >= _MAX_WITNESSES:
             break
-    return tuple(list(flows.values())[:_MAX_WITNESSES])
+    return tuple(list(flows.values())[:_MAX_WITNESSES]), tuple(corners.values())
+
+
+def _probes(corners: Iterable[Flow]) -> tuple[Flow, ...]:
+    """Every corner moved by one in each of its four fields, up and down (capped).
+
+    A corner sits on the edge of the region that reaches a rule, so each step lands just inside
+    or just outside it: the probe that finds an off-by-one in a range, a prefix length or a mask.
+    Checking them all costs a few hundred flows for a typical ACL, where drawing them at random
+    from the witnesses would need thousands.
+    """
+    probes: dict[tuple[object, ...], Flow] = {}
+    for corner in corners:
+        for field in range(4):
+            for up in (False, True):
+                moved = _nudged(corner, field, up)
+                if moved != corner:
+                    probes.setdefault(tuple(moved.__dict__.values()), moved)
+        if len(probes) >= _MAX_PROBES:
+            break
+    return tuple(list(probes.values())[:_MAX_PROBES])
 
 
 def flow_space(policy: Policy, ctx: Context) -> FlowSpace:
@@ -195,16 +250,22 @@ def flow_space(policy: Policy, ctx: Context) -> FlowSpace:
         if proto not in protocols:
             protocols.append(proto)
     icmp_pool = sorted(set(all_icmp_types()) | boundary_icmp)
+    icmp_types: tuple[int | None, ...] = (None, *icmp_pool)
     uses_established = any(m.established for m in rule_matches)
+    witnesses, corners = _witnesses(
+        policy, ctx, uses_established, _special_addresses(policy, ctx), icmp_types
+    )
     return FlowSpace(
         addrs=tuple(ipaddress.IPv4Address(a) for a in sorted(addr_points)),
         boundary_addrs=frozenset(addr_points),
         ports=tuple(sorted(port_points | named_ports)),
         boundary_ports=frozenset(port_points),
-        icmp_types=(None, *icmp_pool),
+        icmp_types=icmp_types,
         boundary_icmp=frozenset(boundary_icmp),
         protocols=tuple(protocols),
-        witnesses=_witnesses(policy, ctx, uses_established, _special_addresses(policy, ctx)),
+        witnesses=witnesses,
+        corners=corners,
+        probes=_probes(corners),
         uses_established=uses_established,
     )
 
@@ -219,6 +280,7 @@ def flow_strategy(space: FlowSpace) -> st.SearchStrategy[Flow]:
     proto_index = st.integers(0, len(space.protocols) - 1)
     icmp_index = st.integers(0, len(space.icmp_types) - 1)
     witness_index = st.integers(0, max(len(space.witnesses) - 1, 0))
+    corner_index = st.integers(0, max(len(space.corners) - 1, 0))
     field_index = st.integers(0, 3)
     flag = st.booleans()
 
@@ -228,8 +290,8 @@ def flow_strategy(space: FlowSpace) -> st.SearchStrategy[Flow]:
             mode = draw(share)
             if mode < _WITNESS_SHARE:
                 return space.witnesses[draw(witness_index)]
-            if mode < _WITNESS_SHARE + _NEAR_SHARE:
-                return _nudged(space.witnesses[draw(witness_index)], draw(field_index), draw(flag))
+            if mode < _WITNESS_SHARE + _NEAR_SHARE and space.corners:
+                return _nudged(space.corners[draw(corner_index)], draw(field_index), draw(flag))
         proto = space.protocols[draw(proto_index)]
         src = _pick_addr(draw, share, addr_index, any_addr, space)
         dst = _pick_addr(draw, share, addr_index, any_addr, space)
@@ -314,3 +376,55 @@ def _pick_port(
 def flows_for(policy: Policy, ctx: Context) -> st.SearchStrategy[Flow]:
     """Boundary-biased flows entering ``ctx``, in the source config's address space."""
     return flow_strategy(flow_space(policy, ctx))
+
+
+# -- shrinking ----------------------------------------------------------------------------------
+
+_SHRINK_CANDIDATES = 12  # smaller pool values tried per field, after the lowest value
+
+
+def _smaller(value: int, pool: Iterable[int]) -> list[int]:
+    """Candidate replacements for ``value``, simplest first: zero, then smaller pool values."""
+    below = sorted({v for v in pool if v < value})
+    return [0, *[v for v in below if v][:_SHRINK_CANDIDATES]] if value else []
+
+
+def _simpler(flow: Flow, space: FlowSpace) -> Iterable[Flow]:
+    """Flows one step simpler than ``flow``: one field reset or lowered, in order of preference.
+
+    The protocol is never changed, since that changes what the flow is about. A field only moves
+    to zero or to a smaller value from the policy's own pools, so what is left in a minimised
+    flow is what the divergence needs.
+    """
+    if flow.established:
+        yield flow.model_copy(update={"established": False})
+    pool_addrs = [int(a) for a in space.addrs]
+    for name in ("src", "dst"):
+        for value in _smaller(int(getattr(flow, name)), pool_addrs):
+            yield flow.model_copy(update={name: ipaddress.IPv4Address(value)})
+    if flow.proto in (6, 17):
+        for name in ("src_port", "dst_port"):
+            for value in _smaller(getattr(flow, name), space.ports):
+                yield flow.model_copy(update={name: value})
+    elif flow.proto == 1 and flow.icmp_type is not None:
+        yield flow.model_copy(update={"icmp_type": None})
+        for value in _smaller(flow.icmp_type, [t for t in space.icmp_types if t is not None]):
+            yield flow.model_copy(update={"icmp_type": value})
+
+
+def shrink_flow(space: FlowSpace, flow: Flow, still_fails: Callable[[Flow], bool]) -> Flow:
+    """The simplest flow reachable from ``flow`` by single-field reductions that still fails.
+
+    Greedy and deterministic: take the first reduction that keeps ``still_fails`` true and start
+    again, until none does. Every step makes one field strictly smaller (or clears a flag), so it
+    terminates, and it costs a few hundred checks at most. Hypothesis shrinks the flows it finds
+    itself; this does the same for the flows the sweep finds, which no random search produced.
+    """
+    current = flow
+    while True:
+        for candidate in _simpler(current, space):
+            if still_fails(candidate):
+                current = candidate
+                break
+        else:
+            return current

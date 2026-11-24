@@ -146,6 +146,21 @@ class NatModel:
         return dst
 
 
+def to_source_space(policy: Policy, ctx: Context, flow: Flow) -> Flow:
+    """The flow as the source device's ACL sees it (policy-semantics 1.5).
+
+    An ASA 8.3+ un-translates a packet that arrives on the mapped interface of a static NAT before
+    it evaluates any ACL, so its ACLs only ever see the *real* destination. A flow addressed to a
+    mapped address is the same flow as the one addressed to the real address behind it. Every
+    other policy (pre-8.3 ACLs are written in mapped addresses, IOS has no translation) already
+    sees the flow as it is.
+    """
+    if policy.address_space != AddressSpace.real or policy.dialect == Dialect.ios:
+        return flow
+    real = NatModel(policy).map_destination(ctx.interface, flow.dst, flow)
+    return flow if real == flow.dst else flow.model_copy(update={"dst": real})
+
+
 def to_panos_space(policy: Policy, ctx: Context, flow: Flow) -> Flow:
     """The flow as a PAN-OS security rule sees it (policy-semantics 1.5 and 7).
 

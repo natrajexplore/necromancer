@@ -254,15 +254,53 @@ def test_rules_apply_only_to_their_from_and_to_zones() -> None:
     to_outside = flow("10.1.0.9", "203.0.113.9")
     to_inside = flow("10.1.0.9", "10.1.0.77")
     inside, outside = find_context(policy, "inside:in"), find_context(policy, "outside:in")
-    assert decide(policy, inside, to_outside).action == Action.permit
-    assert decide(policy, inside, to_inside).action == Action.deny  # wrong egress zone
-    assert decide(policy, outside, to_outside).action == Action.deny  # wrong ingress zone
+    assert decide(policy, inside, to_outside).rule_id == "r"
+    # the rule does not apply to inside -> inside, so the default intrazone rule decides
+    assert decide(policy, inside, to_inside).rule_id == "intrazone-default"
+    # nor to outside -> outside: the zone of the ingress interface is wrong for the rule
+    assert decide(policy, outside, to_outside).rule_id == "intrazone-default"
+    # and outside -> inside is between zones, where PAN-OS denies by default
+    assert decide(policy, outside, to_inside).rule_id == "interzone-default"
 
 
-def test_a_rulebase_with_no_match_denies() -> None:
+def test_a_rulebase_with_no_match_falls_back_to_the_pan_os_default_rules() -> None:
+    """PAN-OS allows traffic within a zone and denies traffic between zones when no rule matches.
+
+    This is why the emitter ends every rulebase with an explicit final deny.
+    """
     policy = read(BASE_LINES)
-    got = decide(policy, find_context(policy, "inside:in"), flow("10.1.0.9", "203.0.113.9"))
-    assert (got.action, got.rule_id) == (Action.deny, "implicit-deny")
+    inside = find_context(policy, "inside:in")
+    between = decide(policy, inside, flow("10.1.0.9", "203.0.113.9"))
+    assert (between.action, between.rule_id) == (Action.deny, "interzone-default")
+    within = decide(policy, inside, flow("10.1.0.9", "10.1.0.77"))
+    assert (within.action, within.rule_id, within.to_zone) == (
+        Action.permit,
+        "intrazone-default",
+        "inside",
+    )
+
+
+def test_the_explicit_final_deny_overrides_the_intrazone_default() -> None:
+    policy = read([*BASE_LINES, "set rulebase security rules last action deny"])
+    got = decide(policy, find_context(policy, "inside:in"), flow("10.1.0.9", "10.1.0.77"))
+    assert (got.action, got.rule_id) == (Action.deny, "last")
+
+
+def test_predefined_icmp_app_ids_are_read_as_the_broad_matches_they_are() -> None:
+    lines = [*BASE_LINES, "set rulebase security rules r action allow"]
+    unreachable = (
+        "set application necro-icmp-3 category networking subcategory ip-protocol "
+        "technology network-protocol risk 1 default ident-by-icmp-type type 3"
+    )
+
+    def match(apps: str) -> Match:
+        rule = f"set rulebase security rules r application {apps}"
+        return read([*lines, unreachable, rule]).acls[RULEBASE][0].match
+
+    ping, icmp, both = match("ping"), match("icmp"), match("[ ping necro-icmp-3 ]")
+    assert (ping.proto, ping.icmp_types) == (1, frozenset({0, 8}))
+    assert (icmp.proto, icmp.icmp_types) == (1, None)  # every ICMP type
+    assert (both.proto, both.icmp_types) == (1, frozenset({0, 3, 8}))
 
 
 def test_traffic_to_the_box_is_answered_by_the_interface_profile_not_the_rulebase() -> None:

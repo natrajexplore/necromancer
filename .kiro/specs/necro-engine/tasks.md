@@ -74,7 +74,7 @@
   - _Requirements: 6.1_
 - [x] 8.2 `prove()` per context incl. implicit contexts, with golden flows first; ProofResult (pass with coverage + unhit rules + seed, or the shrunk counterexample with both decisions and zones)
   - _Requirements: 6.3, 6.4, 6.6, 6.8_
-- [ ] 8.3 Mutation sanity suite: every playbook mutant must fail P2 with a counterexample
+- [x] 8.3 Mutation sanity suite: every playbook mutant must fail P2 with a counterexample
   - _Requirements: 6.7_
 - [ ] 8.4 Performance check: 10k examples per sample under 15 s; 5k-rule synthetic config parse + autopsy under 5 s
   - _Requirements: 6.5, 8.1_

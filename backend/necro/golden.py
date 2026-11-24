@@ -102,9 +102,7 @@ def check_golden(sides: Sides, vectors: Sequence[GoldenVector]) -> GoldenResult:
         verdict = sides.check(ctx, vector.flow, vector.panos_dst)
         reason = _failure(sides, vector, verdict)
         if reason:
-            failures.append(
-                sides.counterexample("golden", ctx, vector.flow, verdict, reason, vector.id)
-            )
+            failures.append(sides.counterexample("golden", ctx, verdict, reason, vector.id))
     return GoldenResult(total=len(vectors), passed=len(vectors) - len(failures), failures=failures)
 
 

@@ -366,7 +366,8 @@ def test_the_sweep_alone_finds_a_broken_rule() -> None:
     assert run.swept is not None and 0 < run.found_at <= run.examples
     assert run.swept.source == "search" and run.swept.context == "outside:in"
     assert run.swept.original.action != run.swept.resurrected.action
-    assert run.examples == len(flow_space(policy, ctx).witnesses)  # every witness is checked
+    space = flow_space(policy, ctx)
+    assert run.examples == len(space.witnesses) + len(space.probes)  # every one is checked
 
 
 def test_a_clean_sweep_records_hits_and_no_failure() -> None:
