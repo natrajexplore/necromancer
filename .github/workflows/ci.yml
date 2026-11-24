@@ -62,7 +62,9 @@ jobs:
         if: hashFiles('backend/pyproject.toml') != ''
         env:
           HYPOTHESIS_PROFILE: dev
-        run: uv run pytest -q --cov=necro --cov-report=term-missing --cov-fail-under=90
+        # Timing checks (marker perf) are excluded here because the coverage tracer slows every
+        # call several times; they run with their unchanged limits in the Performance step below.
+        run: uv run pytest -q -m "not perf" --cov=necro --cov-report=term-missing --cov-fail-under=90
       - name: Proof of Life (PBT, ci profile)
         if: hashFiles('backend/pyproject.toml') != ''
         env:
