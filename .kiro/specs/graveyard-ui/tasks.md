@@ -4,7 +4,7 @@
   - _Requirements: 6.1_
 - [x] 2. API client (React Query) for exhume/autopsy/resurrect/prove/grimoire
   - _Requirements: 1.2_
-- [ ] 3. Graveyard screen: SVG tombstones, sample list, drop/paste zone, privacy note, coverage + unquiet lines
+- [x] 3. Graveyard screen: SVG tombstones, sample list, drop/paste zone, privacy note, coverage + unquiet lines
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 - [ ] 4. Autopsy screen: virtualized RuleTable, GhostBadge, filters, shadow-link highlight, zone mapping panel
   - _Requirements: 2.1, 2.2, 2.3, 2.4_

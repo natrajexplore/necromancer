@@ -1,0 +1,38 @@
+[
+  {
+    "id": "asa-8.2-branch",
+    "file": "asa-8.2-branch.cfg",
+    "dialect": "asa",
+    "os_version": "8.2(5)",
+    "rules": 13,
+    "died": 2016,
+    "sha256": "2d62f703ad2740420ee9f8cfe2edddaa8eedceadfce9fcd2c9ece0a5b6209fed"
+  },
+  {
+    "id": "asa-9.8-dc",
+    "file": "asa-9.8-dc.cfg",
+    "dialect": "asa",
+    "os_version": "9.8(4)",
+    "rules": 6,
+    "died": 2024,
+    "sha256": "20f95ec4115969056b78d5ec8a98efd99df74d8199fb9604a0e6674cfb38c7ed"
+  },
+  {
+    "id": "ios-12-edge",
+    "file": "ios-12-edge.cfg",
+    "dialect": "ios",
+    "os_version": "12.4",
+    "rules": 14,
+    "died": 2016,
+    "sha256": "a227613871aafffca19add9346e5ba9b7d04a67df887e7bb9ffec59e1f289e2a"
+  },
+  {
+    "id": "pix-2006-hq",
+    "file": "pix-2006-hq.cfg",
+    "dialect": "pix",
+    "os_version": "6.3(5)",
+    "rules": 11,
+    "died": 2013,
+    "sha256": "9a36fea0b07792697922e3ac0093ce4131fb08ea6a148753dc2a0ca1619f9ee0"
+  }
+]
