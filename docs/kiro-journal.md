@@ -77,3 +77,15 @@
 - What Kiro did: Added tighten.py and tighten_regions.py (remediations, ledger with approvals, separate tightened artifact) and PBT P6; all gates green at 98% coverage.
 - What the human corrected: Nothing; Kiro corrected its own tasks.md encoding damage in a follow-up commit.
 - Kiro feature used: specs, steering, hooks, PBT
+
+## 2026-11-24 — CLI
+- Spec task(s): necro-engine/8.1, 8.2, 8.3, 8.4
+- What Kiro did: Fixed a seed-dependent coverage flake, added the 10-mutant suite (which exposed three oracle gaps, now fixed) and cut 5,000-rule autopsy from 249 s to 1.3 s.
+- What the human corrected: Nothing; Kiro found 8.1-8.2 already committed plus uncommitted edits it did not make, and committed those in 8.3 (noted in the commit).
+- Kiro feature used: specs, hooks, steering, agent, PBT
+
+## 2026-11-24 — CLI
+- Spec task(s): necro-engine/9.2, 9.3, 9.4
+- What Kiro did: Added the /v1 API with limits and headers, the FastMCP stdio server and the necro CLI over one shared service layer; pinned mcp<2 for FastMCP.
+- What the human corrected: Nothing yet; writes to .kiro/settings/mcp.json were denied, so 9.3 registration is pending.
+- Kiro feature used: specs, hooks, steering, MCP
