@@ -12,7 +12,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
 - [x] 6. Audit header + determinism test (PBT P11 on the report body)
   - _Requirements: 3.1, 3.2, 3.3_
-- [ ] 7. Grimoire Markdown + HTML: all sections in order, zone mapping, zone-to-zone matrix, rule inventory with justification, control mapping, secret-rotation advice
+- [x] 7. Grimoire Markdown + HTML: all sections in order, zone mapping, zone-to-zone matrix, rule inventory with justification, control mapping, secret-rotation advice
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
 - [x] 8. Runbook: pre-checks, PAN-OS `test security-policy-match` list, ASA `packet-tracer` list, rollback, hypercare; snapshot tests per sample
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
