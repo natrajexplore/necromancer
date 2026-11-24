@@ -15,8 +15,10 @@ The other finding types live in ``necro.autopsy_checks``; ``analyze`` runs them 
 from __future__ import annotations
 
 from collections.abc import Iterable
+from itertools import groupby
 
 from necro.autopsy_checks import (
+    AclView,
     acl_contexts,
     acl_findings,
     interface_findings,
@@ -24,8 +26,9 @@ from necro.autopsy_checks import (
     object_findings,
     remark_findings,
     rule_findings,
+    scoped_policy,
 )
-from necro.boxes import Box, boxes_of, overlaps, subtract_all
+from necro.boxes import Box, covered, overlaps, subtract_all
 from necro.evaluate import decide
 from necro.findings import Finding, FindingType, Severity, make_finding
 from necro.ir import Action, Context, Flow, Policy, Rule
@@ -58,28 +61,32 @@ def _ids(rules: Iterable[Rule]) -> list[str]:
 def hygiene_findings(policy: Policy, acl: str, rules: list[Rule]) -> list[Finding]:
     """Shadowed and redundant findings for one ACL, in rule order."""
     contexts = acl_contexts(policy, acl)
-    active = [r for r in rules if not r.inactive]
+    view = AclView(rules)
     findings: list[Finding] = []
-    for i, rule in enumerate(active):
-        mine = boxes_of(rule.match)
-        earlier_rules = active[:i]
-        earlier = [b for e in earlier_rules for b in boxes_of(e.match)]
-        region = subtract_all(list(mine), earlier)
-        if not region:
-            related = _ids(e for e in earlier_rules if overlaps(mine, boxes_of(e.match)))
-            ok, verified = _confirm_shadowed(policy, contexts, rule, mine)
+    for i, rule in enumerate(view.active):
+        mine = view.boxes[i]
+        earlier = view.index.overlapping(mine, before=i)
+        earlier_boxes = [box for _, box in earlier]
+        if covered(mine, earlier_boxes):
+            related = _ids(view.active[position] for position, _ in earlier)
+            # every rule the shadowed rule's flows can match: the earlier overlaps and itself
+            known = [view.active[p] for p in dict.fromkeys(p for p, _ in earlier)] + [rule]
+            ok, verified = _confirm_shadowed(policy, acl, contexts, rule, mine, view, known)
             if ok:
                 findings.append(_shadowed(rule, related, verified))
             continue
-        covering = _covering_later_rules(rule, region, active[i + 1 :])
+        if not view.index.overlapping(mine, after=i):
+            continue  # no later rule overlaps it, so none can take its flows over
+        region = subtract_all(list(mine), earlier_boxes)
+        covering = _covering_later_rules(rule, region, view, i)
         if covering:
-            ok, verified = _confirm_redundant(policy, acl, contexts, rule, region)
+            ok, verified = _confirm_redundant(policy, acl, contexts, rule, region, view)
             if ok:
                 findings.append(_redundant(rule, covering, verified))
     return findings
 
 
-def _covering_later_rules(rule: Rule, region: list[Box], later: list[Rule]) -> list[str]:
+def _covering_later_rules(rule: Rule, region: list[Box], view: AclView, position: int) -> list[str]:
     """Ids of later rules that take over every flow reaching ``rule``, all with its action.
 
     Empty when some flow would instead hit an opposite-action rule, or fall off the end of the
@@ -87,8 +94,10 @@ def _covering_later_rules(rule: Rule, region: list[Box], later: list[Rule]) -> l
     """
     remaining = region
     covering: list[Rule] = []
-    for other in later:
-        boxes = boxes_of(other.match)
+    later = view.index.overlapping(region, after=position)
+    for later_position, group in groupby(later, key=lambda hit: hit[0]):
+        other = view.active[later_position]
+        boxes = [box for _, box in group]
         if not overlaps(remaining, boxes):
             continue
         if other.action != rule.action:
@@ -101,28 +110,41 @@ def _covering_later_rules(rule: Rule, region: list[Box], later: list[Rule]) -> l
 
 
 def _confirm_shadowed(
-    policy: Policy, contexts: list[Context], rule: Rule, mine: list[Box]
+    policy: Policy,
+    acl: str,
+    contexts: list[Context],
+    rule: Rule,
+    mine: list[Box],
+    view: AclView,
+    known: list[Rule],
 ) -> tuple[bool, bool]:
     """(consistent, verified): decide() must never answer with the shadowed rule's id."""
     if not contexts:
         return True, False
+    scoped = scoped_policy(policy, acl, view, mine[:3], known)
     for flow in _flows(mine):
         for ctx in contexts:
-            if decide(policy, ctx, flow).rule_id == rule.id:
+            if decide(scoped, ctx, flow).rule_id == rule.id:
                 return False, True
     return True, True
 
 
 def _confirm_redundant(
-    policy: Policy, acl: str, contexts: list[Context], rule: Rule, region: list[Box]
+    policy: Policy,
+    acl: str,
+    contexts: list[Context],
+    rule: Rule,
+    region: list[Box],
+    view: AclView,
 ) -> tuple[bool, bool]:
     """(consistent, verified): removing the rule must not change action or egress zone."""
     if not contexts:
         return True, False
-    reduced = without_rule(policy, acl, rule)
+    scoped = scoped_policy(policy, acl, view, region[:3])
+    reduced = without_rule(scoped, acl, rule)
     for flow in _flows(region):
         for ctx in contexts:
-            before, after = decide(policy, ctx, flow), decide(reduced, ctx, flow)
+            before, after = decide(scoped, ctx, flow), decide(reduced, ctx, flow)
             if (before.action, before.to_zone) != (after.action, after.to_zone):
                 return False, True
     return True, True

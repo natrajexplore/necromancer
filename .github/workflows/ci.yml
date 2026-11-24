@@ -73,6 +73,9 @@ jobs:
       - name: Golden flows
         if: hashFiles('backend/tests/test_golden_flows.py') != ''
         run: uv run pytest -q tests/test_golden_flows.py
+      - name: Performance (requirements 6.5 and 8.1, CPU time, alone on the runner)
+        if: hashFiles('backend/tests/test_performance.py') != ''
+        run: uv run pytest -q -m perf
       - name: Dependency audit
         if: hashFiles('backend/pyproject.toml') != ''
         run: uv run pip-audit

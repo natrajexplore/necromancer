@@ -51,6 +51,7 @@ files = ["necro"]
 testpaths = ["tests"]
 markers = [
     "pbt: property-based tests (run with HYPOTHESIS_PROFILE=ci for the full budget)",
+    "perf: performance checks against the requirement targets (CPU time; NECRO_PERF_SLACK)",
 ]
 
 [tool.coverage.run]

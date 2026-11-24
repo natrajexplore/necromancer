@@ -16,7 +16,7 @@ import ipaddress
 from dataclasses import dataclass
 from enum import IntEnum
 
-from necro.boxes import KIND_TCP, KIND_UDP, Box, effective_regions
+from necro.boxes import KIND_TCP, KIND_UDP, Box, BoxIndex, boxes_of, effective_regions
 from necro.contexts import build_contexts
 from necro.evaluate import decide
 from necro.findings import SEVERITY_RANK, Finding, FindingType, Severity, make_finding
@@ -69,11 +69,46 @@ def worst_trust(policy: Policy, zones: list[str]) -> Trust:
     return max((zone_trust(policy, z) for z in zones), default=Trust.internal)
 
 
+# ACLs up to this many active rules are confirmed against the whole ACL, as ``decide`` sees it.
+# Larger ones are confirmed against the rules that overlap the witness flows: a rule that does not
+# overlap a flow's region cannot match the flow, so ``decide`` answers the same, in a fraction of
+# the time (``decide`` scans the ACL linearly, which is quadratic over thousands of findings).
+FULL_CONFIRM_LIMIT = 300
+
+
+class AclView:
+    """The active rules of one ACL, their boxes, and an index over them."""
+
+    def __init__(self, rules: list[Rule]) -> None:
+        self.active = [r for r in rules if not r.inactive]
+        self.boxes = [boxes_of(r.match) for r in self.active]
+        self.index = BoxIndex(self.boxes)
+
+    def rules_overlapping(self, boxes: list[Box]) -> list[Rule]:
+        positions = dict.fromkeys(p for p, _ in self.index.overlapping(boxes))
+        return [self.active[p] for p in positions]
+
+
+def scoped_policy(
+    policy: Policy, acl: str, view: AclView, boxes: list[Box], known: list[Rule] | None = None
+) -> Policy:
+    """The policy to ask ``decide`` about flows inside ``boxes``.
+
+    ``known`` is the list of rules already found to overlap ``boxes``, when the caller has it.
+    """
+    if len(view.active) <= FULL_CONFIRM_LIMIT:
+        return policy
+    rules = known if known is not None else view.rules_overlapping(boxes)
+    return policy.model_copy(update={"acls": {**policy.acls, acl: rules}})
+
+
 def witness_flows(pieces: list[Box], limit: int = 3) -> list[Flow]:
     return [f for piece in pieces[:limit] for f in piece.witnesses()]
 
 
-def confirm_effective(policy: Policy, acl: str, rule: Rule, pieces: list[Box]) -> tuple[bool, bool]:
+def confirm_effective(
+    policy: Policy, acl: str, rule: Rule, pieces: list[Box], view: AclView | None = None
+) -> tuple[bool, bool]:
     """(report, verified): does decide() answer with ``rule`` for a flow in ``pieces``?
 
     An ACL that is not bound inbound has no context to ask, so it is reported unverified.
@@ -83,9 +118,11 @@ def confirm_effective(policy: Policy, acl: str, rule: Rule, pieces: list[Box]) -
     contexts = acl_contexts(policy, acl)
     if not contexts:
         return True, False
-    for flow in witness_flows(pieces):
+    flows = witness_flows(pieces)
+    asked = policy if view is None else scoped_policy(policy, acl, view, pieces[:3])
+    for flow in flows:
         for ctx in contexts:
-            result = decide(policy, ctx, flow)
+            result = decide(asked, ctx, flow)
             if result.rule_id == rule.id and result.action == rule.action:
                 return True, True
     return False, True
@@ -221,12 +258,13 @@ def rule_findings(policy: Policy, acl: str, rules: list[Rule]) -> list[Finding]:
     zones = source_zones(policy, acl)
     trust = worst_trust(policy, zones)
     zone = ", ".join(zones)
+    view = AclView(rules)
     findings: list[Finding] = []
-    for rule, region in effective_regions(rules):
+    for rule, region in effective_regions(rules, only=lambda r: r.action == Action.permit):
         if rule.action != Action.permit or not region:
             continue
         if _is_overly_broad(rule):
-            report, verified = confirm_effective(policy, acl, rule, region)
+            report, verified = confirm_effective(policy, acl, rule, region, view)
             if report:
                 severity = Severity.critical if trust == Trust.untrusted else Severity.high
                 findings.append(
@@ -240,19 +278,25 @@ def rule_findings(policy: Policy, acl: str, rules: list[Rule]) -> list[Finding]:
                         scope=_broad_scope(rule),
                     )
                 )
-        findings += _service_finding(policy, acl, rule, region, trust, zone)
-        findings += _return_traffic_finding(policy, acl, rule, region, zone)
+        findings += _service_finding(policy, acl, rule, region, trust, zone, view)
+        findings += _return_traffic_finding(policy, acl, rule, region, zone, view)
     return findings
 
 
 def _service_finding(
-    policy: Policy, acl: str, rule: Rule, region: list[Box], trust: Trust, zone: str
+    policy: Policy,
+    acl: str,
+    rule: Rule,
+    region: list[Box],
+    trust: Trust,
+    zone: str,
+    view: AclView,
 ) -> list[Finding]:
     matches = _matching_services(policy, rule, region, trust)
     if not matches:
         return []
     pieces = [p for _, ps in matches for p in ps]
-    report, verified = confirm_effective(policy, acl, rule, pieces)
+    report, verified = confirm_effective(policy, acl, rule, pieces, view)
     if not report:
         return []
     severity = max(
@@ -273,7 +317,7 @@ def _service_finding(
 
 
 def _return_traffic_finding(
-    policy: Policy, acl: str, rule: Rule, region: list[Box], zone: str
+    policy: Policy, acl: str, rule: Rule, region: list[Box], zone: str, view: AclView
 ) -> list[Finding]:
     """IOS only: ``established`` and source-port-only permits are session state in disguise."""
     if policy.dialect != Dialect.ios:
@@ -285,7 +329,7 @@ def _return_traffic_finding(
         why = "permits packets by source port only, which is how the reply of a session looks"
     else:
         return []
-    report, verified = confirm_effective(policy, acl, rule, region)
+    report, verified = confirm_effective(policy, acl, rule, region, view)
     if not report:
         return []
     return [
