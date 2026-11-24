@@ -23,6 +23,7 @@ from necro.cli import main
 from necro.emitters import emit_panos
 from necro.haunt import HauntError, haunt_candidate
 from necro.service import NecroError
+from tests.gov_helpers import NOW
 from tests.panos_helpers import SAMPLES
 
 SAMPLE_FILES = sorted(p.name for p in SAMPLES.glob("*.cfg"))
@@ -148,12 +149,15 @@ def test_haunting_changes_nothing_but_the_proof(name: str) -> None:
 
 
 def test_haunting_leaves_the_verdict_and_the_grimoire_byte_identical() -> None:
-    def report() -> tuple[str, str, str]:
-        assessed = service.assess(CONFIG, None, budget=BUDGET, seed=1)
+    def report() -> tuple[str, str, str, str]:
+        # The clock is injected (as in the P11 determinism tests), so the "Generated (UTC)" header
+        # is the same on both reports and any other byte that differs still fails the test.
+        assessed = service.assess(CONFIG, None, budget=BUDGET, seed=1, now=NOW)
         response = service.grimoire_response(assessed)
-        return response.verdict.value, response.body_sha256, response.markdown
+        return response.verdict.value, response.body_sha256, response.markdown, response.html
 
     before = report()
+    assert NOW.isoformat() in before[2]  # the injected time reached the header
     assert service.prove(CONFIG, budget=BUDGET, seed=1, haunt=True).passed is False
     assert report() == before
 
