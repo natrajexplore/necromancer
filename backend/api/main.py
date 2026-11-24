@@ -94,12 +94,14 @@ def build_v1() -> APIRouter:
             budget=body.budget,
             seed=body.seed,
             profile=body.profile,
+            haunt=body.haunt,
         )
         _counts(
             request,
             chars=len(body.config),
             examples=result.proof.examples,
             passed=int(result.passed),
+            haunted=int(result.haunted),
         )
         return result
 

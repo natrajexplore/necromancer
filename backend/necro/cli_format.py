@@ -154,6 +154,11 @@ def prove_doc(r: ProveResult) -> Doc:
         ("ledger entries", str(r.ledger_entries)),
         ("blocking source lines", str(r.blocking_lines)),
     ]
+    if r.haunted:
+        facts.insert(
+            0,
+            ("haunted", "yes: a deliberately broken candidate, not a migration result"),
+        )
     if p.counterexample is not None:
         facts += _counterexample_facts(p.counterexample)
     rows = [

@@ -51,10 +51,17 @@ def prove(
     budget: int | None = None,
     seed: int | None = None,
     profile: str | None = None,
+    haunt: bool = False,
 ) -> dict[str, Any]:
-    """Proof of Life: compare original and resurrected behaviour over generated flows."""
+    """Proof of Life: compare original and resurrected behaviour over generated flows.
+
+    ``haunt`` is a demo switch: it proves a deliberately broken candidate and answers
+    ``haunted: true``. Never use a haunted result for a migration.
+    """
     return _guarded(
-        lambda: _dump(service.prove(config, dialect, budget=budget, seed=seed, profile=profile))
+        lambda: _dump(
+            service.prove(config, dialect, budget=budget, seed=seed, profile=profile, haunt=haunt)
+        )
     )
 
 

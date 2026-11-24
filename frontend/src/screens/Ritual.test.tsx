@@ -306,13 +306,21 @@ describe("Proof of Life", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({ haunt: true });
   });
 
-  it("labels a haunted result", async () => {
-    mockApi({ "/v1/prove": () => json(proveResult(false, { haunted: true })) });
+  it("shows the counterexample card, and no 'ignored' alert, when the engine answers haunted", async () => {
+    const fetchMock = mockApi({ "/v1/prove": () => json(proveResult(false, { haunted: true })) });
     const user = userEvent.setup();
     renderWith(<ProofOfLife crypt={UPLOAD} />);
     await user.click(screen.getByRole("checkbox", { name: /Haunt it/ }));
     await user.click(screen.getByRole("button", { name: "Prove" }));
     expect(await screen.findByText(/deliberately broken candidate. Do not use it/)).toBeInTheDocument();
+    const card = await screen.findByRole("article");
+    expect(within(card).getByRole("heading", { name: /The packet that refused to rest/ })).toBeInTheDocument();
+    expect(card).toHaveTextContent("tcp 198.51.100.7:40000 -> 10.1.0.5:443");
+    expect(card).toHaveTextContent("Original config says");
+    expect(card).toHaveTextContent("Resurrected config says");
+    expect(screen.getByRole("img", { name: /heartbeat stopped/ })).toBeInTheDocument();
+    expect(screen.queryByText(/did not apply it/)).not.toBeInTheDocument();
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({ haunt: true });
   });
 });
 

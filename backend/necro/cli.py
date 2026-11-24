@@ -57,6 +57,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--golden", type=Path, help="hand-verified flows (TOML) to run first")
     parser.add_argument(
+        "--haunt",
+        action="store_true",
+        help="prove only: prove a deliberately broken candidate, to show a failed proof "
+        "(demo; the result is not a migration result)",
+    )
+    parser.add_argument(
         "--sidecar",
         type=Path,
         help="waivers, accepted risks, ledger decisions and change record (JSON or TOML)",
@@ -122,6 +128,8 @@ def _run(args: argparse.Namespace) -> int:
     fmt: str = args.format
     if fmt == "html" and args.command != "grimoire":
         raise NecroError("invalid-format", "--format html is only available for grimoire")
+    if args.haunt and args.command != "prove":
+        raise NecroError("invalid-option", "--haunt is only available for prove")
     if args.command == "exhume":
         exhumed = service.exhume(text, args.dialect)
         _emit(exhumed, cli_format.exhume_doc(exhumed), fmt)
@@ -146,6 +154,7 @@ def _run(args: argparse.Namespace) -> int:
             seed=args.seed,
             profile=args.profile,
             golden=_golden(args.golden),
+            haunt=args.haunt,
         )
         _emit(proved, cli_format.prove_doc(proved), fmt)
         return EXIT_OK if proved.passed else EXIT_DIVERGENCE

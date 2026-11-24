@@ -22,6 +22,7 @@ from necro.coverage import Coverage, compute_coverage
 from necro.emitters import emit_panos
 from necro.gate_models import Sidecar
 from necro.golden import GoldenVector, parse_golden
+from necro.haunt import HauntError, haunt_candidate
 from necro.ir import Dialect, ParseError, Policy
 from necro.oracle import (
     DEFAULT_SEED,
@@ -219,15 +220,26 @@ def prove(
     seed: int | None = None,
     profile: str | None = None,
     golden: Sequence[GoldenVector] = (),
+    haunt: bool = False,
 ) -> ProveResult:
-    """Resurrect, then prove the candidate behaves like the source (Proof of Life)."""
+    """Resurrect, then prove the candidate behaves like the source (Proof of Life).
+
+    ``haunt`` proves a deliberately broken copy of the candidate (``necro.haunt``). Only the text
+    handed to the oracle changes: the emission, its ledger and everything else stay as emitted.
+    """
     examples = resolve_budget(budget, profile)
     policy = load(text, dialect)
     emission = emit_panos(policy)
+    candidate = emission.text
+    if haunt:
+        try:
+            candidate = haunt_candidate(candidate)
+        except HauntError as exc:
+            raise NecroError("haunt-unavailable", str(exc)) from exc
     try:
         proof = run_prove(
             policy,
-            emission.text,
+            candidate,
             emission.ledger,
             budget=examples,
             seed=DEFAULT_SEED if seed is None else seed,
@@ -241,6 +253,7 @@ def prove(
         proof=proof,
         ledger_entries=len(emission.ledger),
         blocking_lines=len(_blocking(policy)),
+        haunted=haunt,
     )
 
 

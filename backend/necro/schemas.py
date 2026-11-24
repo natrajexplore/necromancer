@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from necro.findings import Finding
 from necro.gate_models import Sidecar, Verdict
@@ -35,6 +35,7 @@ class ProveRequest(ConfigRequest):
     budget: int | None = Field(default=None, ge=1, le=MAX_BUDGET)
     seed: int | None = Field(default=None, ge=0, le=2**63 - 1)
     profile: str | None = None
+    haunt: bool = False  # demo: prove a deliberately broken candidate (necro.haunt); prove only
 
 
 class GateRequest(ProveRequest):
@@ -45,6 +46,14 @@ class GateRequest(ProveRequest):
     sidecar: Sidecar | None = None
     golden: str | None = Field(default=None, max_length=MAX_GOLDEN_CHARS)
     name: str | None = Field(default=None, max_length=120)  # label of the input in the report
+
+    @field_validator("haunt")
+    @classmethod
+    def _refuse_haunt(cls, value: bool) -> bool:
+        """A verdict or report never rests on a deliberately broken candidate."""
+        if value:
+            raise ValueError("haunt is only available for prove, never for gates or the report")
+        return value
 
 
 class ErrorBody(BaseModel):
@@ -130,6 +139,7 @@ class ProveResult(BaseModel):
     proof: ProofResult
     ledger_entries: int
     blocking_lines: int
+    haunted: bool = False  # True: the proof ran on a deliberately broken candidate (necro.haunt)
 
 
 class GateResponse(BaseModel):
