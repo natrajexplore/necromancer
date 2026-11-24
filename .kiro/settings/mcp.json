@@ -7,9 +7,10 @@
         "--directory",
         "backend",
         "python",
-        "mcp_server.py"
+        "-m",
+        "mcp_server"
       ],
-      "disabled": true,
+      "disabled": false,
       "autoApprove": [
         "exhume",
         "autopsy",
