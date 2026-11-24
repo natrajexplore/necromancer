@@ -2,7 +2,7 @@
 
 - [x] 1. Vite + React + TS + Tailwind scaffold, design tokens, self-hosted fonts, reduced-motion utility
   - _Requirements: 6.1_
-- [ ] 2. API client (React Query) for exhume/autopsy/resurrect/prove/grimoire
+- [x] 2. API client (React Query) for exhume/autopsy/resurrect/prove/grimoire
   - _Requirements: 1.2_
 - [ ] 3. Graveyard screen: SVG tombstones, sample list, drop/paste zone, privacy note, coverage + unquiet lines
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
