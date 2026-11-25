@@ -16,8 +16,9 @@ Commands are never invented for an OS that lacks them: ``packet-tracer`` exists 
 Flows to the device itself and flows with an unresolved egress zone cannot be given to
 ``test security-policy-match``, so they are listed as manual checks.
 
-Corner witnesses of an ``any`` rule are 0.0.0.0, 255.255.255.255 and port 0. Nobody should type
-those into a device, so a realistic flow with the same decisions is looked for first.
+Corner witnesses of an ``any`` rule are 0.0.0.0, 255.255.255.255 and port 0, and those of a
+subnet rule are its network and broadcast addresses. Nobody should type those into a device, so a
+realistic flow with the same decisions is looked for first, with host addresses only.
 """
 
 from __future__ import annotations
@@ -186,8 +187,53 @@ def _usable(address: ipaddress.IPv4Address) -> bool:
     )
 
 
-def _realistic(flow: Flow) -> bool:
-    if not (_usable(flow.src) and _usable(flow.dst)):
+def _known_networks(policy: Policy) -> list[ipaddress.IPv4Network]:
+    """Every subnet the config mentions: interfaces, routes and the addresses of every rule."""
+    found: set[ipaddress.IPv4Network] = set()
+    for iface in policy.interfaces:
+        if iface.ip_address is not None:
+            found.add(iface.ip_address.network)
+    found.update(route.network for route in policy.routes)
+    for rules in policy.acls.values():
+        for rule in rules:
+            found.update(rule.match.src.to_networks())
+            found.update(rule.match.dst.to_networks())
+    return sorted((n for n in found if n.prefixlen <= 30), key=lambda n: (n.prefixlen, n))
+
+
+class _Subnets:
+    """The network and broadcast addresses of the known subnets: not hosts to type in a test."""
+
+    def __init__(self, policy: Policy) -> None:
+        self.networks = _known_networks(policy)
+        self.special: set[ipaddress.IPv4Address] = set()
+        for net in self.networks:
+            self.special.update((net.network_address, net.broadcast_address))
+        self.owned = {i.ip_address.ip for i in policy.interfaces if i.ip_address is not None}
+
+    def is_host(self, address: ipaddress.IPv4Address) -> bool:
+        return _usable(address) and address not in self.special
+
+    def hosts_near(self, address: ipaddress.IPv4Address) -> list[ipaddress.IPv4Address]:
+        """Host addresses just inside each subnet that has ``address`` as network or broadcast
+        address, nearest first and never an address of the device."""
+        found: list[ipaddress.IPv4Address] = []
+        for net in reversed(self.networks):  # the most specific subnet first
+            if address == net.network_address:
+                near = [net.network_address + n for n in range(1, 5)]
+            elif address == net.broadcast_address:
+                near = [net.broadcast_address - n for n in range(1, 5)]
+            else:
+                continue
+            for host in near:
+                fits = host in net and self.is_host(host) and host not in self.owned
+                if fits and host not in found:
+                    found.append(host)
+        return found
+
+
+def _realistic(flow: Flow, subnets: _Subnets) -> bool:
+    if not (subnets.is_host(flow.src) and subnets.is_host(flow.dst)):
         return False
     return flow.proto not in (6, 17) or (flow.src_port > 0 and flow.dst_port > 0)
 
@@ -204,15 +250,19 @@ def _interface_hosts(policy: Policy) -> list[ipaddress.IPv4Address]:
     return found
 
 
-def _variants(flow: Flow, hosts: list[ipaddress.IPv4Address]) -> Iterator[Flow]:
+def _variants(flow: Flow, hosts: list[ipaddress.IPv4Address], subnets: _Subnets) -> Iterator[Flow]:
     """The flow with its unusable fields replaced by usable ones, in a fixed order."""
     ported = flow.proto in (6, 17)
     sources = [flow.src]
     if not _usable(flow.src):
         sources = [ipaddress.IPv4Address(a) for a in _DEFAULT_SOURCES]
+    elif not subnets.is_host(flow.src):
+        sources = subnets.hosts_near(flow.src)
     targets = [flow.dst]
     if not _usable(flow.dst):
         targets = [*hosts, *(ipaddress.IPv4Address(a) for a in _DEFAULT_TARGETS)]
+    elif not subnets.is_host(flow.dst):
+        targets = subnets.hosts_near(flow.dst)
     source_ports = [_DEFAULT_SOURCE_PORT] if ported and flow.src_port == 0 else [flow.src_port]
     dest_ports = list(_DEFAULT_DEST_PORTS) if ported and flow.dst_port == 0 else [flow.dst_port]
     for src, dst, sport, dport in product(sources, targets, source_ports, dest_ports):
@@ -227,6 +277,7 @@ class _Builder:
         self.sides = Sides(policy, emission.text, emission.ledger)
         self.applications = _applications(emission.lines)
         self.hosts = _interface_hosts(policy)
+        self.subnets = _Subnets(policy)
         self.asa = packet_tracer_supported(policy)
         self.commands = Commands(source_note=_source_note(policy))
         self.seen: set[str] = set()
@@ -322,12 +373,14 @@ class _Builder:
     def representative(self, ctx: Context, pair: tuple[str, str], flows: list[Flow]) -> Flow:
         """A realistic flow with the same pair of rule decisions, or the first witness."""
         for flow in flows:
-            if _realistic(flow):
+            if _realistic(flow, self.subnets):
                 return flow
         for flow in flows:
-            for variant in _variants(flow, self.hosts):
+            before = self.sides.check(ctx, flow)
+            for variant in _variants(flow, self.hosts, self.subnets):
                 decided = self.sides.check(ctx, variant)
-                if (decided.original.rule_id, decided.resurrected.rule_id) == pair:
+                same = (decided.original.rule_id, decided.resurrected.rule_id) == pair
+                if same and decided.original_zone == before.original_zone:
                     return variant
         return flows[0]
 

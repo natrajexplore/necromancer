@@ -25,7 +25,7 @@
 |---|---|---|
 | [ ] | CUT-01 | Start the change freeze on the source: no rule changes. |
 | [ ] | CUT-02 | Apply the candidate on the target and commit. |
-| [ ] | CUT-03 | Run the 25 target verification commands and record each result next to its expected result. |
+| [ ] | CUT-03 | Run the 26 target verification commands and record each result next to its expected result. |
 | [ ] | CUT-05 | Test the 2 manual checks by another method and record the result. |
 | [ ] | CUT-06 | Compare every result with its expected decision. A mismatch is a rollback trigger. |
 | [ ] | CUT-07 | Move traffic to the target as the change plan says. |
@@ -52,15 +52,16 @@ Run each command in operational mode on the target after the commit. Each one is
 | PIX-14 | golden | dmz:in | test security-policy-match from dmz to inside source 192.168.50.20 destination 10.10.10.5 destination-port 22 protocol 6 | allow by rule dmz_in-3 |
 | PIX-15 | golden | inside:in | test security-policy-match from inside to outside source 10.10.20.5 destination 198.51.100.200 destination-port 443 protocol 6 | allow by rule implicit-inside-to-outside |
 | PIX-16 | golden | inside:in | test security-policy-match from inside to dmz source 10.10.20.5 destination 192.168.50.12 destination-port 53 protocol 17 | allow by rule implicit-inside-to-dmz |
-| ORC-0001 | oracle | outside:in | test security-policy-match from outside to dmz source 192.168.50.0 destination 192.168.50.11 destination-port 443 protocol 6 | allow by rule outside_in-1 |
-| ORC-0002 | oracle | outside:in | test security-policy-match from outside to dmz source 192.168.50.0 destination 192.168.50.11 destination-port 25 protocol 6 | allow by rule outside_in-2 |
-| ORC-0003 | oracle | outside:in | test security-policy-match from outside to dmz source 192.168.50.0 destination 192.168.50.12 destination-port 53 protocol 17 | allow by rule outside_in-3 |
-| ORC-0004 | oracle | outside:in | test security-policy-match from outside to outside source 192.0.2.10 destination 198.51.100.2 protocol 1 | deny by rule outside_in-7 (ICMP type 0) |
-| ORC-0005 | oracle | outside:in | test security-policy-match from outside to dmz source 192.168.50.0 destination 192.168.50.0 protocol 1 application necro-icmp-0 | allow by rule outside_in-6 (ICMP type 0) |
-| ORC-0008 | oracle | outside:in | test security-policy-match from outside to dmz source 192.168.50.0 destination 192.168.50.0 destination-port 65535 protocol 6 | deny by rule outside_in-7 |
-| ORC-0009 | oracle | dmz:in | test security-policy-match from dmz to inside source 192.168.50.12 destination 10.10.0.0 destination-port 53 protocol 17 | allow by rule dmz_in-1 |
-| ORC-0010 | oracle | dmz:in | test security-policy-match from dmz to inside source 192.168.50.11 destination 10.10.0.0 destination-port 25 protocol 6 | allow by rule dmz_in-2 |
-| ORC-0011 | oracle | dmz:in | test security-policy-match from dmz to inside source 10.10.0.0 destination 10.10.0.0 destination-port 65535 protocol 6 | allow by rule dmz_in-3 |
+| ORC-0001 | oracle | outside:in | test security-policy-match from outside to dmz source 198.51.100.1 destination 192.168.50.11 destination-port 443 protocol 6 | allow by rule outside_in-1 |
+| ORC-0002 | oracle | outside:in | test security-policy-match from outside to dmz source 198.51.100.1 destination 192.168.50.11 destination-port 25 protocol 6 | allow by rule outside_in-2 |
+| ORC-0003 | oracle | outside:in | test security-policy-match from outside to dmz source 198.51.100.1 destination 192.168.50.12 destination-port 53 protocol 17 | allow by rule outside_in-3 |
+| ORC-0004 | oracle | outside:in | test security-policy-match from outside to dmz source 203.0.113.1 destination 192.168.50.10 destination-port 23 protocol 6 | allow by rule outside_in-5 |
+| ORC-0005 | oracle | outside:in | test security-policy-match from outside to outside source 192.0.2.10 destination 198.51.100.2 protocol 1 | deny by rule outside_in-7 (ICMP type 0) |
+| ORC-0006 | oracle | outside:in | test security-policy-match from outside to dmz source 192.0.2.10 destination 192.168.50.2 protocol 1 application necro-icmp-0 | allow by rule outside_in-6 (ICMP type 0) |
+| ORC-0009 | oracle | outside:in | test security-policy-match from outside to dmz source 198.51.100.1 destination 192.168.50.10 destination-port 65535 protocol 6 | deny by rule outside_in-7 |
+| ORC-0010 | oracle | dmz:in | test security-policy-match from dmz to outside source 192.168.50.12 destination 198.51.100.2 destination-port 53 protocol 17 | allow by rule dmz_in-1 |
+| ORC-0011 | oracle | dmz:in | test security-policy-match from dmz to outside source 192.168.50.11 destination 198.51.100.2 destination-port 25 protocol 6 | allow by rule dmz_in-2 |
+| ORC-0012 | oracle | dmz:in | test security-policy-match from dmz to outside source 192.0.2.10 destination 198.51.100.2 destination-port 443 protocol 6 | allow by rule dmz_in-3 |
 
 ### Verification commands on the source (ASA packet-tracer)
 
@@ -70,8 +71,8 @@ packet-tracer is not available on PIX 6.3(5) (it needs ASA 7.2 or later), so no 
 
 | ID | Origin | Context | Flow | Expected result | Why |
 |---|---|---|---|---|---|
-| ORC-0006 | oracle | outside:in | icmp 192.168.50.0 -> 198.51.100.1 type 0 | allow by rule mgmt-profile:ping; ledger LED-0001 | traffic to the device itself follows the interface management profile |
-| ORC-0007 | oracle | outside:in | icmp 192.168.50.0 -> 10.10.0.1 type 0 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
+| ORC-0007 | oracle | outside:in | icmp 198.51.100.1 -> 198.51.100.1 type 0 | allow by rule mgmt-profile:ping; ledger LED-0001 | traffic to the device itself follows the interface management profile |
+| ORC-0008 | oracle | outside:in | icmp 198.51.100.1 -> 10.10.0.1 type 0 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
 
 ### Rollback (P9)
 

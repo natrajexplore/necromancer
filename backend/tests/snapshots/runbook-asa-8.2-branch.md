@@ -49,15 +49,15 @@ Run each command in operational mode on the target after the commit. Each one is
 | A82-11 | golden | outside:in | test security-policy-match from outside to inside source 192.0.2.10 destination 172.16.30.5 destination-port 3389 protocol 6 | deny by rule OUTSIDE_IN-9 |
 | A82-12 | golden | inside:in | test security-policy-match from inside to outside source 172.16.10.20 destination 192.0.2.53 destination-port 53 protocol 17 | allow by rule INSIDE_OUT-3 |
 | A82-13 | golden | inside:in | test security-policy-match from inside to outside source 172.16.10.20 destination 192.0.2.1 destination-port 3389 protocol 6 | allow by rule INSIDE_OUT-4 |
-| ORC-0001 | oracle | outside:in | test security-policy-match from outside to inside source 203.0.113.255 destination 172.16.20.255 destination-port 8443 protocol 6 | allow by rule OUTSIDE_IN-1 |
-| ORC-0002 | oracle | outside:in | test security-policy-match from outside to inside source 203.0.113.50 destination 172.16.20.255 destination-port 8443 protocol 6 | allow by rule OUTSIDE_IN-3 |
-| ORC-0003 | oracle | outside:in | test security-policy-match from outside to inside source 198.51.100.255 destination 172.16.30.5 destination-port 161 protocol 17 | allow by rule OUTSIDE_IN-5 |
-| ORC-0004 | oracle | outside:in | test security-policy-match from outside to inside source 198.51.100.5 destination 172.16.20.255 destination-port 65535 protocol 6 | allow by rule OUTSIDE_IN-6 |
-| ORC-0005 | oracle | outside:in | test security-policy-match from outside to inside source 203.0.113.255 destination 198.51.100.5 destination-port 1433 protocol 6 | allow by rule OUTSIDE_IN-7 |
+| ORC-0001 | oracle | outside:in | test security-policy-match from outside to inside source 203.0.113.129 destination 172.16.20.1 destination-port 8080 protocol 6 | allow by rule OUTSIDE_IN-1 |
+| ORC-0002 | oracle | outside:in | test security-policy-match from outside to inside source 203.0.113.50 destination 172.16.20.1 destination-port 8443 protocol 6 | allow by rule OUTSIDE_IN-3 |
+| ORC-0003 | oracle | outside:in | test security-policy-match from outside to inside source 198.51.100.5 destination 172.16.30.5 destination-port 161 protocol 17 | allow by rule OUTSIDE_IN-5 |
+| ORC-0004 | oracle | outside:in | test security-policy-match from outside to inside source 192.0.2.10 destination 172.16.20.1 destination-port 443 protocol 6 | allow by rule OUTSIDE_IN-6 |
+| ORC-0005 | oracle | outside:in | test security-policy-match from outside to inside source 203.0.113.129 destination 198.51.100.5 destination-port 1433 protocol 6 | allow by rule OUTSIDE_IN-7 |
 | ORC-0006 | oracle | outside:in | test security-policy-match from outside to inside source 198.51.100.5 destination 198.51.100.5 destination-port 65535 protocol 6 | deny by rule OUTSIDE_IN-9 |
-| ORC-0008 | oracle | inside:in | test security-policy-match from inside to inside source 172.16.10.255 destination 172.16.30.5 destination-port 80 protocol 6 | allow by rule INSIDE_OUT-1 |
-| ORC-0010 | oracle | inside:in | test security-policy-match from inside to inside source 172.16.10.255 destination 172.16.30.5 destination-port 443 protocol 6 | allow by rule INSIDE_OUT-2 |
-| ORC-0011 | oracle | inside:in | test security-policy-match from inside to inside source 172.16.10.255 destination 172.16.30.5 destination-port 53 protocol 17 | allow by rule INSIDE_OUT-3 |
+| ORC-0008 | oracle | inside:in | test security-policy-match from inside to inside source 172.16.10.1 destination 172.16.30.5 destination-port 80 protocol 6 | allow by rule INSIDE_OUT-1 |
+| ORC-0010 | oracle | inside:in | test security-policy-match from inside to inside source 172.16.10.1 destination 172.16.30.5 destination-port 443 protocol 6 | allow by rule INSIDE_OUT-2 |
+| ORC-0011 | oracle | inside:in | test security-policy-match from inside to inside source 172.16.10.1 destination 172.16.30.5 destination-port 53 protocol 17 | allow by rule INSIDE_OUT-3 |
 | ORC-0012 | oracle | inside:in | test security-policy-match from inside to inside source 172.16.30.5 destination 172.16.30.5 destination-port 65535 protocol 6 | allow by rule INSIDE_OUT-4 |
 
 ### Verification commands on the source (ASA packet-tracer)
@@ -79,15 +79,15 @@ Run these on the source before the freeze ends, to compare with the baseline. pa
 | A82-11 | golden | outside:in | packet-tracer input outside tcp 192.0.2.10 40000 172.16.30.5 3389 | DROP (source rule OUTSIDE_IN#9) |
 | A82-12 | golden | inside:in | packet-tracer input inside udp 172.16.10.20 50000 192.0.2.53 53 | ALLOW (source rule INSIDE_OUT#3) |
 | A82-13 | golden | inside:in | packet-tracer input inside tcp 172.16.10.20 50000 192.0.2.1 3389 | ALLOW (source rule INSIDE_OUT#4) |
-| ORC-0001 | oracle | outside:in | packet-tracer input outside tcp 203.0.113.255 65535 172.16.20.255 8443 | ALLOW (source rule OUTSIDE_IN#1) |
-| ORC-0002 | oracle | outside:in | packet-tracer input outside tcp 203.0.113.50 65535 172.16.20.255 8443 | ALLOW (source rule OUTSIDE_IN#3) |
-| ORC-0003 | oracle | outside:in | packet-tracer input outside udp 198.51.100.255 65535 172.16.30.5 161 | ALLOW (source rule OUTSIDE_IN#5) |
-| ORC-0004 | oracle | outside:in | packet-tracer input outside tcp 198.51.100.5 65535 172.16.20.255 65535 | ALLOW (source rule OUTSIDE_IN#6) |
-| ORC-0005 | oracle | outside:in | packet-tracer input outside tcp 203.0.113.255 65535 198.51.100.5 1433 | ALLOW (source rule OUTSIDE_IN#7) |
+| ORC-0001 | oracle | outside:in | packet-tracer input outside tcp 203.0.113.129 40000 172.16.20.1 8080 | ALLOW (source rule OUTSIDE_IN#1) |
+| ORC-0002 | oracle | outside:in | packet-tracer input outside tcp 203.0.113.50 40000 172.16.20.1 8443 | ALLOW (source rule OUTSIDE_IN#3) |
+| ORC-0003 | oracle | outside:in | packet-tracer input outside udp 198.51.100.5 65535 172.16.30.5 161 | ALLOW (source rule OUTSIDE_IN#5) |
+| ORC-0004 | oracle | outside:in | packet-tracer input outside tcp 192.0.2.10 40000 172.16.20.1 443 | ALLOW (source rule OUTSIDE_IN#6) |
+| ORC-0005 | oracle | outside:in | packet-tracer input outside tcp 203.0.113.129 40000 198.51.100.5 1433 | ALLOW (source rule OUTSIDE_IN#7) |
 | ORC-0006 | oracle | outside:in | packet-tracer input outside tcp 198.51.100.5 65535 198.51.100.5 65535 | DROP (source rule OUTSIDE_IN#9) |
-| ORC-0008 | oracle | inside:in | packet-tracer input inside tcp 172.16.10.255 65535 172.16.30.5 80 | ALLOW (source rule INSIDE_OUT#1) |
-| ORC-0010 | oracle | inside:in | packet-tracer input inside tcp 172.16.10.255 65535 172.16.30.5 443 | ALLOW (source rule INSIDE_OUT#2) |
-| ORC-0011 | oracle | inside:in | packet-tracer input inside udp 172.16.10.255 65535 172.16.30.5 53 | ALLOW (source rule INSIDE_OUT#3) |
+| ORC-0008 | oracle | inside:in | packet-tracer input inside tcp 172.16.10.1 65535 172.16.30.5 80 | ALLOW (source rule INSIDE_OUT#1) |
+| ORC-0010 | oracle | inside:in | packet-tracer input inside tcp 172.16.10.1 65535 172.16.30.5 443 | ALLOW (source rule INSIDE_OUT#2) |
+| ORC-0011 | oracle | inside:in | packet-tracer input inside udp 172.16.10.1 65535 172.16.30.5 53 | ALLOW (source rule INSIDE_OUT#3) |
 | ORC-0012 | oracle | inside:in | packet-tracer input inside tcp 172.16.30.5 65535 172.16.30.5 65535 | ALLOW (source rule INSIDE_OUT#4) |
 
 ### Checks that need another method
@@ -95,7 +95,7 @@ Run these on the source before the freeze ends, to compare with the baseline. pa
 | ID | Origin | Context | Flow | Expected result | Why |
 |---|---|---|---|---|---|
 | ORC-0007 | oracle | outside:in | tcp 198.51.100.5:65535 -> 198.51.100.2:65535 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
-| ORC-0009 | oracle | inside:in | tcp 172.16.10.255:65535 -> 198.51.100.2:80 | deny by rule implicit-deny; ledger LED-0004 | traffic to the device itself follows the interface management profile |
+| ORC-0009 | oracle | inside:in | tcp 172.16.10.1:65535 -> 198.51.100.2:80 | deny by rule implicit-deny; ledger LED-0004 | traffic to the device itself follows the interface management profile |
 
 ### Rollback (P9)
 

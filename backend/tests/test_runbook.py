@@ -6,6 +6,7 @@ Snapshots live in ``tests/snapshots``. When the runbook changes on purpose, rege
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 from functools import cache
@@ -165,6 +166,49 @@ def test_oracle_flows_are_realistic_where_a_realistic_flow_exists(name: str) -> 
         if item.origin == "oracle":
             assert not re.search(r"(source|destination) 0\.", item.command), item.command
             assert "destination-port 0 " not in item.command, item.command
+
+
+def _addresses(command: str) -> list[ipaddress.IPv4Address]:
+    found = re.findall(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b", command)
+    return [ipaddress.IPv4Address(a) for a in found]
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_oracle_commands_use_host_addresses_not_network_or_broadcast_addresses(name: str) -> None:
+    """A subnet rule's boundary witnesses (10.10.0.0, 172.16.10.255) are not typed into a device."""
+    b = built(name)
+    subnets = runbook_commands._Subnets(b.policy)
+    assert subnets.special  # the samples have subnets to check against
+    for item in b.runbook.commands.target + b.runbook.commands.source:
+        if item.origin == "oracle":
+            for address in _addresses(item.command):
+                assert address not in subnets.special, item.command
+    for manual in b.runbook.commands.manual:
+        if manual.origin == "oracle":
+            for address in _addresses(manual.flow):
+                assert address not in subnets.special, manual.flow
+
+
+def test_hosts_near_a_network_or_broadcast_address_skip_the_device_addresses() -> None:
+    b = built("pix-2006-hq")
+    subnets = runbook_commands._Subnets(b.policy)
+    network = ipaddress.IPv4Address("10.10.0.0")
+    assert network in subnets.special
+    near = subnets.hosts_near(network)
+    assert near and ipaddress.IPv4Address("10.10.0.1") not in near  # that is the inside interface
+    assert all(subnets.is_host(a) for a in near)
+    assert ipaddress.IPv4Address("10.10.255.255") in subnets.special
+    assert subnets.hosts_near(ipaddress.IPv4Address("10.10.255.255"))[0] == ipaddress.IPv4Address(
+        "10.10.255.254"
+    )
+    assert subnets.hosts_near(ipaddress.IPv4Address("10.10.4.4")) == []  # already a host
+
+
+def test_golden_flows_keep_their_hand_written_addresses() -> None:
+    """PIX-06 and PIX-07 probe the edges of a /24 on purpose; the runbook keeps them."""
+    commands = built("pix-2006-hq").runbook.commands.target
+    by_id = {c.id: c.command for c in commands}
+    assert "source 203.0.113.0 " in by_id["PIX-06"] and "source 203.0.113.255 " in by_id["PIX-07"]
 
 
 def test_a_golden_flow_that_the_candidate_contradicts_is_reported_as_such() -> None:

@@ -25,7 +25,7 @@
 |---|---|---|
 | [ ] | CUT-01 | Start the change freeze on the source: no rule changes. |
 | [ ] | CUT-02 | Apply the candidate on the target and commit. |
-| [ ] | CUT-03 | Run the 22 target verification commands and record each result next to its expected result. |
+| [ ] | CUT-03 | Run the 23 target verification commands and record each result next to its expected result. |
 | [ ] | CUT-05 | Test the 11 manual checks by another method and record the result. |
 | [ ] | CUT-06 | Compare every result with its expected decision. A mismatch is a rollback trigger. |
 | [ ] | CUT-07 | Move traffic to the target as the change plan says. |
@@ -48,16 +48,17 @@ Run each command in operational mode on the target after the commit. Each one is
 | IOS-11 | golden | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 10.20.5.9 destination 203.0.113.80 destination-port 5999 protocol 6 | deny by rule LAN_OUT-6 |
 | IOS-12 | golden | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 10.20.1.1 destination 203.0.113.53 destination-port 53 protocol 6 | deny by rule LAN_OUT-6 |
 | IOS-13 | golden | FastEthernet0/2:in | test security-policy-match from MGMT to LAN source 10.99.0.50 destination 10.20.1.10 destination-port 3389 protocol 6 | allow by rule implicit-MGMT-to-any |
-| ORC-0001 | oracle | FastEthernet0/0:in | test security-policy-match from WAN to LAN source 192.0.2.2 destination 10.20.255.255 destination-port 65535 protocol 6 | deny by rule 110-7; ledger LED-0001 |
+| ORC-0001 | oracle | FastEthernet0/0:in | test security-policy-match from WAN to LAN source 192.0.2.10 destination 10.20.0.2 destination-port 443 protocol 6 | deny by rule 110-7; ledger LED-0001 |
 | ORC-0003 | oracle | FastEthernet0/0:in | test security-policy-match from WAN to LAN source 192.0.2.2 destination 10.20.1.10 destination-port 443 protocol 6 | allow by rule 110-2 |
 | ORC-0004 | oracle | FastEthernet0/0:in | test security-policy-match from WAN to LAN source 192.0.2.2 destination 10.20.1.53 destination-port 53 protocol 17 | allow by rule 110-3 |
 | ORC-0006 | oracle | FastEthernet0/0:in | test security-policy-match from WAN to WAN source 192.0.2.10 destination 192.0.2.1 protocol 1 application necro-icmp-0 | allow by rule 110-5 (ICMP type 0) |
-| ORC-0008 | oracle | FastEthernet0/0:in | test security-policy-match from WAN to WAN source 192.0.2.10 destination 192.0.2.1 protocol 1 application necro-icmp-11 | allow by rule 110-6 (ICMP type 11) |
-| ORC-0011 | oracle | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 10.20.0.0 destination 192.0.2.1 destination-port 80 protocol 6 | allow by rule LAN_OUT-1 |
-| ORC-0013 | oracle | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 10.20.0.0 destination 192.0.2.1 destination-port 443 protocol 6 | allow by rule LAN_OUT-2 |
-| ORC-0015 | oracle | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 10.20.0.0 destination 192.0.2.1 destination-port 53 protocol 17 | allow by rule LAN_OUT-3 |
-| ORC-0017 | oracle | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 10.20.0.0 destination 192.0.2.1 destination-port 6000 protocol 6 | allow by rule LAN_OUT-5 |
-| ORC-0019 | oracle | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 192.0.2.10 destination 192.0.2.1 destination-port 443 protocol 6 | deny by rule LAN_OUT-6 |
+| ORC-0008 | oracle | FastEthernet0/0:in | test security-policy-match from WAN to WAN source 192.0.2.10 destination 192.0.2.1 protocol 1 | deny by rule 110-7 |
+| ORC-0009 | oracle | FastEthernet0/0:in | test security-policy-match from WAN to WAN source 192.0.2.10 destination 192.0.2.1 protocol 1 application necro-icmp-11 | allow by rule 110-6 (ICMP type 11) |
+| ORC-0012 | oracle | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 10.20.0.2 destination 192.0.2.1 destination-port 80 protocol 6 | allow by rule LAN_OUT-1 |
+| ORC-0014 | oracle | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 10.20.0.2 destination 192.0.2.1 destination-port 443 protocol 6 | allow by rule LAN_OUT-2 |
+| ORC-0016 | oracle | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 10.20.0.2 destination 192.0.2.1 destination-port 53 protocol 17 | allow by rule LAN_OUT-3 |
+| ORC-0018 | oracle | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 10.20.0.2 destination 192.0.2.1 destination-port 6000 protocol 6 | allow by rule LAN_OUT-5 |
+| ORC-0020 | oracle | FastEthernet0/1:in | test security-policy-match from LAN to WAN source 192.0.2.10 destination 192.0.2.1 destination-port 443 protocol 6 | deny by rule LAN_OUT-6 |
 
 ### Verification commands on the source (ASA packet-tracer)
 
@@ -71,13 +72,13 @@ packet-tracer is not available on IOS 12.4 (it needs ASA 7.2 or later), so no so
 | ORC-0002 | oracle | FastEthernet0/0:in | tcp 192.0.2.2:65535 -> 10.20.0.1:65535 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
 | ORC-0005 | oracle | FastEthernet0/0:in | tcp 192.0.2.2:65535 -> 10.20.0.1:23 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
 | ORC-0007 | oracle | FastEthernet0/0:in | icmp 192.0.2.2 -> 192.0.2.2 type 0 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
-| ORC-0009 | oracle | FastEthernet0/0:in | icmp 192.0.2.2 -> 192.0.2.2 type 11 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
-| ORC-0010 | oracle | FastEthernet0/0:in | tcp 192.0.2.2:65535 -> 192.0.2.2:65535 | deny by rule implicit-deny; ledger LED-0004 | traffic to the device itself follows the interface management profile |
-| ORC-0012 | oracle | FastEthernet0/1:in | tcp 10.20.255.255:65535 -> 192.0.2.2:80 | deny by rule implicit-deny; ledger LED-0005 | traffic to the device itself follows the interface management profile |
-| ORC-0014 | oracle | FastEthernet0/1:in | tcp 10.20.255.255:65535 -> 192.0.2.2:443 | deny by rule implicit-deny; ledger LED-0005 | traffic to the device itself follows the interface management profile |
-| ORC-0016 | oracle | FastEthernet0/1:in | udp 10.20.255.255:65535 -> 192.0.2.2:53 | deny by rule implicit-deny; ledger LED-0005 | traffic to the device itself follows the interface management profile |
-| ORC-0018 | oracle | FastEthernet0/1:in | tcp 10.20.255.255:65535 -> 192.0.2.2:6010 | deny by rule implicit-deny; ledger LED-0005 | traffic to the device itself follows the interface management profile |
-| ORC-0020 | oracle | FastEthernet0/1:in | tcp 192.0.2.2:65535 -> 192.0.2.2:65535 | deny by rule implicit-deny; ledger LED-0007 | traffic to the device itself follows the interface management profile |
+| ORC-0010 | oracle | FastEthernet0/0:in | icmp 192.0.2.2 -> 192.0.2.2 type 11 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
+| ORC-0011 | oracle | FastEthernet0/0:in | tcp 192.0.2.2:65535 -> 192.0.2.2:65535 | deny by rule implicit-deny; ledger LED-0004 | traffic to the device itself follows the interface management profile |
+| ORC-0013 | oracle | FastEthernet0/1:in | tcp 10.20.0.1:65535 -> 192.0.2.2:80 | deny by rule implicit-deny; ledger LED-0005 | traffic to the device itself follows the interface management profile |
+| ORC-0015 | oracle | FastEthernet0/1:in | tcp 10.20.0.1:65535 -> 192.0.2.2:443 | deny by rule implicit-deny; ledger LED-0005 | traffic to the device itself follows the interface management profile |
+| ORC-0017 | oracle | FastEthernet0/1:in | udp 10.20.0.1:65535 -> 192.0.2.2:53 | deny by rule implicit-deny; ledger LED-0005 | traffic to the device itself follows the interface management profile |
+| ORC-0019 | oracle | FastEthernet0/1:in | tcp 10.20.0.1:65535 -> 192.0.2.2:6010 | deny by rule implicit-deny; ledger LED-0005 | traffic to the device itself follows the interface management profile |
+| ORC-0021 | oracle | FastEthernet0/1:in | tcp 192.0.2.2:65535 -> 192.0.2.2:65535 | deny by rule implicit-deny; ledger LED-0007 | traffic to the device itself follows the interface management profile |
 
 ### Rollback (P9)
 
