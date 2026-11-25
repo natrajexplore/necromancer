@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import ipaddress
 
-from necro.ir import MgmtAccess, NatRule, NatType, Route
+from necro.ir import Action, MgmtAccess, NatRule, NatType, Route
 from necro.parsers.cisco_common import (
     Unsupported,
     looks_like_ipv4,
@@ -234,13 +234,12 @@ def parse_mgmt(tokens: list[str], names: dict[str, str]) -> MgmtAccess | None:
 
 
 def parse_icmp_mgmt(tokens: list[str], names: dict[str, str]) -> MgmtAccess | None:
-    """``icmp permit <any|host H|A M> <nameif>``. Types and ``deny`` are unsupported in v1."""
+    """``icmp permit|deny <any|host H|A M> <nameif>``. ICMP types are unsupported in v1."""
     if len(tokens) >= 2 and tokens[1] == "unreachable":
         return None
     if len(tokens) < 4 or tokens[1] not in ("permit", "deny"):
         raise Unsupported("bad-icmp-command")
-    if tokens[1] == "deny":
-        raise Unsupported("icmp-deny-to-the-box")
+    action = Action.deny if tokens[1] == "deny" else Action.permit
     rest = tokens[2:]
     if rest[0] == "any" and len(rest) == 2:
         src = AddrSet.any()
@@ -251,7 +250,7 @@ def parse_icmp_mgmt(tokens: list[str], names: dict[str, str]) -> MgmtAccess | No
         src = AddrSet.from_network(_network(parse_ipv4(rest[0], names), prefix, strict=False))
     else:
         raise Unsupported("icmp-type-to-the-box")
-    return MgmtAccess(proto="icmp", src_addr=src, interface=rest[-1])
+    return MgmtAccess(proto="icmp", src_addr=src, interface=rest[-1], action=action)
 
 
 def parse_snmp_host(tokens: list[str], names: dict[str, str]) -> MgmtAccess:

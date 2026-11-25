@@ -473,11 +473,19 @@ def test_management_commands() -> None:
         ("icmp", "outside"),
         ("icmp", "outside"),
         ("icmp", "inside"),
+        ("icmp", "outside"),
         ("snmp", "inside"),
     ]
+    assert [m.action.value for m in p.mgmt_access if m.proto == "icmp"] == [
+        "permit",
+        "permit",
+        "permit",
+        "deny",
+    ]
+    assert p.http_server_enabled
     assert p.mgmt_access[1].src_addr == AddrSet.any()
     assert p.mgmt_access[-1].version == "2c"
-    assert _reasons(p) == ["icmp-deny-to-the-box", "icmp-type-to-the-box"]
+    assert _reasons(p) == ["icmp-type-to-the-box"]
 
 
 def test_inspection_vpn_and_block_children_are_accounted() -> None:

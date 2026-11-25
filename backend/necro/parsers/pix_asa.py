@@ -82,6 +82,7 @@ class _PixAsaParser:
         self.dialect = dialect
         self.os_version = os_version
         self.mode = PolicyMode.routed
+        self.http_server = False
         self.names: dict[str, str] = {}
         self.groups = GroupTable()
         self.ifaces: list[IfaceState] = []
@@ -156,6 +157,7 @@ class _PixAsaParser:
             nat_rules=self.nat_rules,
             nat_control=self.nat_control,
             mgmt_access=self.mgmt,
+            http_server_enabled=self.http_server,
             line_records=records,
             unparsed=unparsed,
             same_security_inter=self.same_inter,
@@ -435,6 +437,8 @@ class _PixAsaParser:
         self.ledger.mark(n, "migrated", relevant=True)
 
     def _cmd_mgmt(self, n: int, tokens: list[str]) -> None:
+        if [t.lower() for t in tokens[:3]] == ["http", "server", "enable"]:
+            self.http_server = True
         access = stmts.parse_mgmt(tokens, self.names)
         if access is None:
             self.ledger.mark(n, "management-plane", relevant=False)

@@ -23,7 +23,13 @@ from necro.emitters.panos_network import device_addresses
 from necro.emitters.panos_objects import name_list
 from necro.ir import Action, Context, Dialect, LedgerClass, Match, Policy
 from necro.ledger import LedgerEntry, make_entry
-from necro.mgmt import SERVICE_NAMES, access_services, service_box
+from necro.mgmt import (
+    SERVICE_NAMES,
+    access_services,
+    icmp_sources,
+    service_box,
+    source_boxes,
+)
 from necro.sets import AddrSet
 
 Access = dict[str, dict[str, AddrSet]]  # zone -> management service -> permitted sources
@@ -89,6 +95,8 @@ def plan_management(env: BuildEnv) -> MgmtPlan:
     addresses = _interface_addresses(env)
     access: Access = {}
     for entry in policy.mgmt_access:
+        if policy.dialect != Dialect.ios and entry.proto in ("icmp", "http"):
+            continue  # ordered icmp lists and the http server switch are resolved below
         services = access_services(policy.dialect, entry.proto)
         if not services:
             env.unsupported.append(
@@ -103,7 +111,38 @@ def plan_management(env: BuildEnv) -> MgmtPlan:
                     _add(access, zone, service, entry.src_addr)
     if policy.dialect == Dialect.ios:
         _router_rule_access(env, access, addresses)
+    else:
+        _pix_asa_access(env, access, addresses)
     return MgmtPlan(access, addresses)
+
+
+def _pix_asa_access(env: BuildEnv, access: Access, addresses: Addresses) -> None:
+    """``http`` lines (when the server is enabled) and the ``icmp`` lists of PIX/ASA.
+
+    ``ping`` joins a profile only when its sources fit inside what the profile's other services
+    already admit. The profile has one ``permitted-ip`` list for every service, so a wider ping
+    list would widen telnet/ssh/https/snmp for those sources. That is a security loss, so the
+    flows that need it stay denied on PAN-OS and the ``to-the-box`` ledger lists them.
+    """
+    policy = env.policy
+    if policy.http_server_enabled:
+        for entry in policy.mgmt_access:
+            if entry.proto == "http" and entry.interface:
+                zone = env.zones.of_nameif(entry.interface)
+                if zone in addresses:
+                    _add(access, zone, "https", entry.src_addr)
+    for item in policy.interfaces:
+        if not item.nameif or item.ip_address is None:
+            continue
+        zone = env.zones.by_nameif[item.nameif]
+        sources = icmp_sources(policy, item.nameif)
+        if sources.is_empty():
+            continue
+        others = AddrSet()
+        for service_sources in access.get(zone, {}).values():
+            others = others.union(service_sources)
+        if others.is_empty() or others.covers(sources):
+            _add(access, zone, "ping", sources)
 
 
 def profile_lines(env: BuildEnv, plan: MgmtPlan) -> list[str]:
@@ -131,9 +170,17 @@ def profile_lines(env: BuildEnv, plan: MgmtPlan) -> list[str]:
 
 def _old_regions(policy: Policy, ctx: Context, whole: list[Box]) -> dict[Action, list[Box]]:
     """What the source decides for flows to the device's addresses, per ingress context."""
-    if policy.dialect != Dialect.ios or not ctx.acl_name:
-        # decide(): ACLs never filter to-the-box traffic on PIX/ASA, and an IOS interface with
-        # no ACL permits everything.
+    if policy.dialect != Dialect.ios:
+        # decide(): the management commands of the receiving interface decide on PIX/ASA.
+        allowed = [
+            hit
+            for w in whole
+            for b in source_boxes(policy, ctx.interface)
+            if (hit := w.intersect(b))
+        ]
+        return {Action.permit: allowed, Action.deny: subtract_all(list(whole), allowed)}
+    if not ctx.acl_name:
+        # An IOS interface with no ACL permits everything.
         return {Action.permit: list(whole), Action.deny: []}
     rules = policy.acls.get(ctx.acl_name, [])
     decided: dict[Action, list[Box]] = {Action.permit: [], Action.deny: []}
@@ -168,15 +215,19 @@ def to_the_box_entries(env: BuildEnv, plan: MgmtPlan) -> list[LedgerEntry]:
     if device.is_empty():
         return []
     whole = boxes_of(Match(dst=device))
-    admitted: list[Box] = []
-    for zone, host in plan.addresses.items():
-        permitted = plan.permitted(zone)
-        admitted += [
-            service_box(service, permitted, AddrSet.from_host(host))
-            for service in plan.enabled(zone)
-        ]
     entries: list[LedgerEntry] = []
     for ctx in build_contexts(policy):
+        # the profile of the interface that receives the flow answers it, and no other
+        zone = env.zones.of_context(policy, ctx)
+        host = plan.addresses.get(zone)
+        admitted = (
+            [
+                service_box(service, plan.permitted(zone), AddrSet.from_host(host))
+                for service in plan.enabled(zone)
+            ]
+            if host is not None
+            else []
+        )
         groups: dict[tuple[Action, Action], list[Box]] = {}
         for old, pieces in _old_regions(policy, ctx, whole).items():
             for piece in pieces:

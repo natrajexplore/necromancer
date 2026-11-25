@@ -119,15 +119,21 @@ def test_ledger_claims_about_the_source_match_decide_and_regions_never_contradic
 def test_asa_management_commands_become_one_profile_per_interface() -> None:
     policy = asa(
         "telnet 10.1.0.0 255.255.255.0 inside\nssh 10.1.0.0 255.255.255.0 inside\n"
-        "http 10.1.0.0 255.255.255.0 inside\n"
+        "http server enable\nhttp 10.1.0.0 255.255.255.0 inside\n"
     )
     emission = emit_panos(policy)
     head = "set network profiles interface-management-profile necro-mgmt-inside"
+    outside = "set network profiles interface-management-profile necro-mgmt-outside"
+    # no icmp line on outside: all ICMP is admitted. On inside the ping sources (any) are wider
+    # than what the other services admit, so ping is left out rather than widening telnet.
     assert profile_lines(emission.lines) == [
+        f"{outside} ping yes",
         f"{head} telnet yes",
         f"{head} ssh yes",
         f"{head} https yes",  # ASA 'http' is the ASDM HTTPS server
         f'{head} permitted-ip "10.1.0.0/24"',
+        "set network interface ethernet ethernet1/1 layer3 interface-management-profile "
+        "necro-mgmt-outside",
         "set network interface ethernet ethernet1/2 layer3 interface-management-profile "
         "necro-mgmt-inside",
     ]
@@ -136,7 +142,7 @@ def test_asa_management_commands_become_one_profile_per_interface() -> None:
 
 def test_icmp_permit_maps_to_ping_and_any_source_leaves_permitted_ip_open() -> None:
     emission = emit_panos(asa("icmp permit any inside\n"))
-    lines = profile_lines(emission.lines)
+    lines = [ln for ln in profile_lines(emission.lines) if "necro-mgmt-inside" in ln]
     assert lines[0].endswith("necro-mgmt-inside ping yes")
     assert not any("permitted-ip" in ln for ln in lines)
 
@@ -155,17 +161,28 @@ def test_traffic_to_the_box_is_compared_with_the_profile_not_the_acl() -> None:
     for denied in (wrong_port, wrong_source):
         entries = covering(emission.ledger, ctx, denied)
         assert [(e.old_action, e.new_action, e.informational) for e in entries] == [
-            (Action.permit, Action.deny, False)
+            (Action.deny, Action.deny, True)
         ]
         assert all(e.entry_class == LedgerClass.to_the_box for e in entries)
+    # all ICMP is admitted by the source (no icmp line), but a ping entry would widen telnet
+    entries = covering(emission.ledger, ctx, flow("10.1.0.50", "10.1.0.1", 1, icmp_type=8))
+    assert [(e.old_action, e.new_action, e.informational) for e in entries] == [
+        (Action.permit, Action.deny, False)
+    ]
 
 
-def test_without_any_management_command_every_flow_to_the_box_is_denied_and_recorded() -> None:
+def test_without_any_management_command_only_icmp_is_admitted_to_the_box() -> None:
     emission = emit_panos(asa(""))
-    assert profile_lines(emission.lines) == []
-    probe = flow("203.0.113.9", "192.0.2.1", 6, dport=22)
-    entries = covering(emission.ledger, "outside:in", probe)
-    assert [(e.old_action, e.new_action) for e in entries] == [(Action.permit, Action.deny)]
+    assert [ln.split("necro-mgmt-")[1] for ln in profile_lines(emission.lines)[:2]] == [
+        "outside ping yes",
+        "inside ping yes",
+    ]
+    ssh = flow("203.0.113.9", "192.0.2.1", 6, dport=22)
+    entries = covering(emission.ledger, "outside:in", ssh)
+    assert [(e.old_action, e.new_action) for e in entries] == [(Action.deny, Action.deny)]
+    ping = flow("203.0.113.9", "192.0.2.1", 1, icmp_type=8)
+    entries = covering(emission.ledger, "outside:in", ping)
+    assert [(e.old_action, e.new_action) for e in entries] == [(Action.permit, Action.permit)]
 
 
 def test_ios_vty_and_snmp_lines_apply_to_every_interface_address() -> None:
@@ -177,7 +194,11 @@ def test_ios_vty_and_snmp_lines_apply_to_every_interface_address() -> None:
 
 
 def test_an_ios_rule_that_addresses_only_the_router_opens_its_service_for_that_interface() -> None:
-    """110#4 permits telnet from anywhere to the LAN address, so LAN's profile admits any source."""
+    """110#4 permits telnet from anywhere to the LAN address, so LAN's profile admits any source.
+
+    Only flows that arrive on LAN reach that profile. The WAN flow of 110#4 is no longer admitted
+    (no far-interface access), and the ledger records that the source permitted it.
+    """
     emission = emit_panos(policy_of("ios-12-edge.cfg"))
     lines = profile_lines(emission.lines)
     assert not any("necro-mgmt-LAN permitted-ip" in ln for ln in lines)
@@ -185,16 +206,16 @@ def test_an_ios_rule_that_addresses_only_the_router_opens_its_service_for_that_i
     golden = flow("198.51.100.5", "10.20.0.1", 6, dport=23)
     entries = covering(emission.ledger, "FastEthernet0/0:in", golden)
     assert [(e.entry_class, e.old_action, e.new_action) for e in entries] == [
-        (LedgerClass.to_the_box, Action.permit, Action.permit)
+        (LedgerClass.to_the_box, Action.permit, Action.deny)
     ]
 
 
 def test_one_permitted_ip_list_per_profile_widens_other_services_and_the_ledger_says_so() -> None:
     emission = emit_panos(policy_of("ios-12-edge.cfg"))
-    # SSH to the LAN address from the WAN is denied by ACL 110, but LAN's profile admits ssh
-    # from any source because the same profile admits telnet from any source.
+    # SSH to the LAN address arriving on LAN is denied by the source, but LAN's profile admits
+    # ssh from any source because the same profile admits telnet from any source.
     widened = flow("198.51.100.5", "10.20.0.1", 6, dport=22)
-    entries = covering(emission.ledger, "FastEthernet0/0:in", widened)
+    entries = covering(emission.ledger, "FastEthernet0/1:in", widened)
     assert [(e.old_action, e.new_action, e.informational) for e in entries] == [
         (Action.deny, Action.permit, False)
     ]
@@ -220,7 +241,8 @@ def test_service_tables() -> None:
     assert service_of_flow(flow("10.0.0.1", "10.0.0.2", 6, dport=22)) == "ssh"
     assert service_of_flow(flow("10.0.0.1", "10.0.0.2", 17, dport=161)) == "snmp"
     assert service_of_flow(flow("10.0.0.1", "10.0.0.2", 1, icmp_type=8)) == "ping"
-    assert service_of_flow(flow("10.0.0.1", "10.0.0.2", 1, icmp_type=0)) is None
+    assert service_of_flow(flow("10.0.0.1", "10.0.0.2", 1, icmp_type=0)) == "ping"
+    assert service_of_flow(flow("10.0.0.1", "10.0.0.2", 1)) == "ping"
     assert service_of_flow(flow("10.0.0.1", "10.0.0.2", 47)) is None
     assert service_of_flow(flow("10.0.0.1", "10.0.0.2", 6, dport=25)) is None
 

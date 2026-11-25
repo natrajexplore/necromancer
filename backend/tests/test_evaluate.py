@@ -21,6 +21,7 @@ from necro.ir import (
     Flow,
     Interface,
     Match,
+    MgmtAccess,
     Policy,
     Rule,
 )
@@ -229,20 +230,21 @@ def test_asa_acl_bound_overrides_level() -> None:
     assert d.action == Action.deny
 
 
-def test_asa_to_the_box_bypasses_acl() -> None:
-    """On PIX/ASA, traffic destined to the device IP bypasses security ACLs."""
+def test_asa_to_the_box_ignores_the_acl_and_follows_the_management_commands() -> None:
+    """On PIX/ASA, an ACL neither blocks nor admits traffic to the device (policy-semantics 1.3)."""
     inside = _iface("inside", 100, "10.0.0.1/24")
     deny_all = _rule("ACL_IN", 1, Action.deny)
     policy = Policy(
         dialect=Dialect.asa,
         interfaces=[inside],
         acls={"ACL_IN": [deny_all]},
+        mgmt_access=[MgmtAccess(proto="telnet", src_addr=AddrSet.any(), interface="inside")],
     )
     ctx = _context("inside", acl_name="ACL_IN")
-    flow = _flow("10.0.0.5", "10.0.0.1")  # destination is device's own IP
-    d = decide(policy, ctx, flow)
-    assert d.action == Action.permit
-    assert d.to_zone == "self"
+    telnet = _flow("10.0.0.5", "10.0.0.1", dst_port=23)
+    assert decide(policy, ctx, telnet).action == Action.permit  # the deny-all ACL is not consulted
+    d = decide(policy, ctx, _flow("10.0.0.5", "10.0.0.1"))  # tcp without a management command
+    assert (d.action, d.rule_id, d.to_zone) == (Action.deny, "implicit-deny", "self")
 
 
 # ---------------------------------------------------------------------------

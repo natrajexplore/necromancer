@@ -11,7 +11,8 @@ Semantics implemented (see policy-semantics steering for the authoritative spec)
     - same-security-traffic inter/intra-interface logic
     - nat-control: flows without a translation are denied (no-translation)
     - Outbound ACL: ingress AND egress must permit
-    - ACLs do NOT filter to-the-box traffic (management-plane on PIX/ASA)
+    - ACLs do NOT filter to-the-box traffic. The management commands decide it: only on the
+      interface that owns the address, and only if telnet/ssh/http/snmp-server host/icmp admit it
 
   ASA 8.3+ (global ACL):
     - Interface ACL (if any) -> global ACL (if any) -> implicit deny
@@ -38,6 +39,7 @@ from necro.ir import (
     Policy,
     Rule,
 )
+from necro.mgmt import source_admits
 from necro.nat import NatModel
 from necro.zones import RouteTable, build_route_table
 
@@ -189,17 +191,25 @@ def _decide_inner(
     # On PIX/ASA, to-the-box traffic bypasses security ACLs (management-plane).
     # On IOS, inbound ACLs do filter to-self traffic, so we continue.
     if policy.dialect in (Dialect.pix, Dialect.asa) and to_zone == "self":
-        return Decision(
-            action=Action.permit,
-            rule_id="implicit-security-level",
-            to_zone="self",
-            reason="to-the-box traffic bypasses security ACLs on PIX/ASA",
-        )
+        return _decide_to_the_box(policy, context, flow)
 
     if policy.dialect == Dialect.ios:
         return _decide_ios(policy, context, flow, to_zone)
 
     return _decide_pix_asa(policy, context, flow, to_zone, route_table)
+
+
+def _decide_to_the_box(policy: Policy, context: Context, flow: Flow) -> Decision:
+    """PIX/ASA flow to the device: the management commands decide, never the ACLs (1.3)."""
+    service = source_admits(policy, context.interface, flow)
+    if service is not None:
+        return Decision(action=Action.permit, rule_id=f"mgmt:{service}", to_zone="self")
+    return Decision(
+        action=Action.deny,
+        rule_id="implicit-deny",
+        to_zone="self",
+        reason="no management command of the receiving interface admits the flow",
+    )
 
 
 def _decide_ios(policy: Policy, context: Context, flow: Flow, to_zone: str) -> Decision:

@@ -26,7 +26,7 @@
 | [ ] | CUT-01 | Start the change freeze on the source: no rule changes. |
 | [ ] | CUT-02 | Apply the candidate on the target and commit. |
 | [ ] | CUT-03 | Run the 25 target verification commands and record each result next to its expected result. |
-| [ ] | CUT-05 | Test the 1 manual checks by another method and record the result. |
+| [ ] | CUT-05 | Test the 2 manual checks by another method and record the result. |
 | [ ] | CUT-06 | Compare every result with its expected decision. A mismatch is a rollback trigger. |
 | [ ] | CUT-07 | Move traffic to the target as the change plan says. |
 
@@ -57,10 +57,10 @@ Run each command in operational mode on the target after the commit. Each one is
 | ORC-0003 | oracle | outside:in | test security-policy-match from outside to dmz source 192.168.50.0 destination 192.168.50.12 destination-port 53 protocol 17 | allow by rule outside_in-3 |
 | ORC-0004 | oracle | outside:in | test security-policy-match from outside to outside source 192.0.2.10 destination 198.51.100.2 protocol 1 | deny by rule outside_in-7 (ICMP type 0) |
 | ORC-0005 | oracle | outside:in | test security-policy-match from outside to dmz source 192.168.50.0 destination 192.168.50.0 protocol 1 application necro-icmp-0 | allow by rule outside_in-6 (ICMP type 0) |
-| ORC-0007 | oracle | outside:in | test security-policy-match from outside to dmz source 192.168.50.0 destination 192.168.50.0 destination-port 65535 protocol 6 | deny by rule outside_in-7 |
-| ORC-0008 | oracle | dmz:in | test security-policy-match from dmz to inside source 192.168.50.12 destination 10.10.0.0 destination-port 53 protocol 17 | allow by rule dmz_in-1 |
-| ORC-0009 | oracle | dmz:in | test security-policy-match from dmz to inside source 192.168.50.11 destination 10.10.0.0 destination-port 25 protocol 6 | allow by rule dmz_in-2 |
-| ORC-0010 | oracle | dmz:in | test security-policy-match from dmz to inside source 10.10.0.0 destination 10.10.0.0 destination-port 65535 protocol 6 | allow by rule dmz_in-3 |
+| ORC-0008 | oracle | outside:in | test security-policy-match from outside to dmz source 192.168.50.0 destination 192.168.50.0 destination-port 65535 protocol 6 | deny by rule outside_in-7 |
+| ORC-0009 | oracle | dmz:in | test security-policy-match from dmz to inside source 192.168.50.12 destination 10.10.0.0 destination-port 53 protocol 17 | allow by rule dmz_in-1 |
+| ORC-0010 | oracle | dmz:in | test security-policy-match from dmz to inside source 192.168.50.11 destination 10.10.0.0 destination-port 25 protocol 6 | allow by rule dmz_in-2 |
+| ORC-0011 | oracle | dmz:in | test security-policy-match from dmz to inside source 10.10.0.0 destination 10.10.0.0 destination-port 65535 protocol 6 | allow by rule dmz_in-3 |
 
 ### Verification commands on the source (ASA packet-tracer)
 
@@ -70,7 +70,8 @@ packet-tracer is not available on PIX 6.3(5) (it needs ASA 7.2 or later), so no 
 
 | ID | Origin | Context | Flow | Expected result | Why |
 |---|---|---|---|---|---|
-| ORC-0006 | oracle | outside:in | icmp 192.168.50.0 -> 198.51.100.1 type 0 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
+| ORC-0006 | oracle | outside:in | icmp 192.168.50.0 -> 198.51.100.1 type 0 | allow by rule mgmt-profile:ping; ledger LED-0001 | traffic to the device itself follows the interface management profile |
+| ORC-0007 | oracle | outside:in | icmp 192.168.50.0 -> 10.10.0.1 type 0 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
 
 ### Rollback (P9)
 
@@ -103,12 +104,13 @@ Hypercare lasts 10 business days. Rules and entries to watch:
 
 | Subject | Reason |
 |---|---|
-| ledger LED-0001 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source permits these flows and the profile admits them.. Affected: tcp 10.10.0.0/16 -> 10.10.0.1/32 dport 23 |
-| ledger LED-0002 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source model permits these flows but no management service of the emitted profile admits them, so PAN-OS denies them.. Affected: tcp 0.0.0.0/5 and 15 more -> 10.10.0.1/32 and 2 more; tcp 10.10.0.0/16 -> 192.168.50.1/32 and 1 more; tcp 10.10.0.0/16 -> 10.10.0.1/32 dport 0-22,24-65535; and 3 more |
+| ledger LED-0001 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source permits these flows and the profile admits them.. Affected: icmp any -> 198.51.100.1/32 |
+| ledger LED-0002 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source denies these flows and the profile does not admit them.. Affected: tcp any -> 10.10.0.1/32 and 2 more; udp any -> 10.10.0.1/32 and 2 more; icmp any -> 10.10.0.1/32 and 1 more; and 1 more |
 | ledger LED-0003 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source permits these flows and the profile admits them.. Affected: tcp 10.10.0.0/16 -> 10.10.0.1/32 dport 23 |
-| ledger LED-0004 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source model permits these flows but no management service of the emitted profile admits them, so PAN-OS denies them.. Affected: tcp 0.0.0.0/5 and 15 more -> 10.10.0.1/32 and 2 more; tcp 10.10.0.0/16 -> 192.168.50.1/32 and 1 more; tcp 10.10.0.0/16 -> 10.10.0.1/32 dport 0-22,24-65535; and 3 more |
-| ledger LED-0005 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source permits these flows and the profile admits them.. Affected: tcp 10.10.0.0/16 -> 10.10.0.1/32 dport 23 |
-| ledger LED-0006 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source model permits these flows but no management service of the emitted profile admits them, so PAN-OS denies them.. Affected: tcp 0.0.0.0/5 and 15 more -> 10.10.0.1/32 and 2 more; tcp 10.10.0.0/16 -> 192.168.50.1/32 and 1 more; tcp 10.10.0.0/16 -> 10.10.0.1/32 dport 0-22,24-65535; and 3 more |
+| ledger LED-0004 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source model permits these flows but no management service of the emitted profile admits them, so PAN-OS denies them.. Affected: icmp any -> 10.10.0.1/32 |
+| ledger LED-0005 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source denies these flows and the profile does not admit them.. Affected: tcp 0.0.0.0/5 and 15 more -> 10.10.0.1/32 and 2 more; tcp 10.10.0.0/16 -> 192.168.50.1/32 and 1 more; tcp 10.10.0.0/16 -> 10.10.0.1/32 dport 0-22,24-65535; and 3 more |
+| ledger LED-0006 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source permits these flows and the profile admits them.. Affected: icmp any -> 192.168.50.1/32 |
+| ledger LED-0007 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source denies these flows and the profile does not admit them.. Affected: tcp any -> 10.10.0.1/32 and 2 more; udp any -> 10.10.0.1/32 and 2 more; icmp any -> 10.10.0.1/32 and 1 more; and 1 more |
 | source rule outside_in#4 | not exercised by the proof in context outside:in (85.7% of active rules hit) |
 | candidate rule outside_in-4 | not exercised by the proof in context outside:in (75% of active rules hit) |
 | candidate rule necro-final-deny | not exercised by the proof in context outside:in (75% of active rules hit) |

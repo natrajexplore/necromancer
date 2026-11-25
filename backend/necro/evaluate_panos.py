@@ -7,6 +7,7 @@ the route lookup of the post-NAT destination, which ``evaluate.decide`` has alre
 Policy-semantics 7: a flow addressed to the device itself is answered by the interface
 management profile of the interface that owns the destination address, not by the rulebase.
 The reader turns each enabled profile service into one ``MgmtAccess`` entry for that interface.
+A flow that arrives on another interface is not admitted (no far-interface access).
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ def decide_panos(
     candidate config that lost that final deny.
     """
     if to_zone == "self":
-        return _decide_to_the_box(policy, flow)
+        return _decide_to_the_box(policy, context, flow)
     for rule in policy.acls.get(context.acl_name, []):
         if rule.inactive:
             continue
@@ -56,7 +57,7 @@ def decide_panos(
     )
 
 
-def _decide_to_the_box(policy: Policy, flow: Flow) -> Decision:
+def _decide_to_the_box(policy: Policy, context: Context, flow: Flow) -> Decision:
     owner = next(
         (
             i.nameif
@@ -66,7 +67,7 @@ def _decide_to_the_box(policy: Policy, flow: Flow) -> Decision:
         "",
     )
     service = service_of_flow(flow)
-    if service is not None:
+    if service is not None and owner == context.interface:
         for access in policy.mgmt_access:
             if (
                 access.proto == service

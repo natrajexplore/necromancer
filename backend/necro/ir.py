@@ -183,6 +183,7 @@ class MgmtAccess(BaseModel):
     interface: str = ""  # nameif the rule applies to
     version: str = ""  # SSH version, SNMP version, etc.
     source_line: int = 0
+    action: Action = Action.permit  # ``icmp deny`` lines are ordered entries with deny
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -326,6 +327,7 @@ class Policy(BaseModel):
     nat_control: bool = False  # ASA only; PIX always enforces it
 
     mgmt_access: list[MgmtAccess] = Field(default_factory=list)
+    http_server_enabled: bool = False  # PIX/ASA ``http server enable``; http lines need it
     line_records: list[LineRecord] = Field(default_factory=list)
     unparsed: list[UnparsedLine] = Field(default_factory=list)
 
