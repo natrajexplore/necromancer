@@ -173,3 +173,9 @@
 - What Kiro did: Fixed the flaky haunt Grimoire test by injecting the P11 NOW clock into assess(now=...), comparing verdict, body hash, Markdown and HTML byte for byte; checked other tests for the same race; pushed 75d3faa.
 - What the human corrected: The human reported the CI failure and required the fix not weaken the comparison.
 - Kiro feature used: hooks, PBT, steering
+
+## 2026-11-25 — CLI
+- Spec task(s): necro-engine/8.2, graveyard-ui/6, necro-engine/4.3, migration-governance/8
+- What Kiro did: Modelled PIX/ASA to-the-box flows from management commands, auto-loaded golden flows for named samples (pix-2006-hq 16/16), raised banner confidence to 0.95, used host addresses in the runbook; pushed e0fd0f3..f3636fb.
+- What the human corrected: The human specified the semantics and gates; Kiro reported that one inside ICMP ledger entry cannot be removed (single permitted-ip list).
+- Kiro feature used: specs, hooks, steering, PBT
