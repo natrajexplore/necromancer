@@ -53,7 +53,38 @@ describe("React Query bindings", () => {
     const { result } = renderHook(() => useProve(CRYPT), { wrapper: Wrapper });
     expect(fetchMock).not.toHaveBeenCalled();
     await result.current.mutateAsync({ budget: 50, seed: 3 });
-    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ config: CRYPT.config, budget: 50, seed: 3 });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      config: CRYPT.config,
+      sample: "asa-9.8-dc",
+      budget: 50,
+      seed: 3,
+    });
+  });
+
+  it("names the sample for prove and grimoire so the engine loads its golden flows", async () => {
+    const fetchMock = mockApi({
+      "/v1/prove": () => json({ api_version: "v1", passed: true }),
+      "/v1/grimoire": () => json({ api_version: "v1" }),
+    });
+    const { Wrapper } = wrapper();
+    const prove = renderHook(() => useProve({ ...CRYPT, dialect: "asa" }), { wrapper: Wrapper });
+    await prove.result.current.mutateAsync({});
+    const grimoire = renderHook(() => useGrimoire({ ...CRYPT, dialect: "asa" }), { wrapper: Wrapper });
+    await grimoire.result.current.mutateAsync();
+    for (const call of fetchMock.mock.calls) {
+      expect(JSON.parse(String(call[1]?.body))).toMatchObject({ sample: "asa-9.8-dc", dialect: "asa" });
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("names no sample for an upload", async () => {
+    const fetchMock = mockApi({ "/v1/prove": () => json({ api_version: "v1", passed: true }) });
+    const { Wrapper } = wrapper();
+    const { result } = renderHook(() => useProve({ id: "upload:1", name: "mine", config: "x\n" }), {
+      wrapper: Wrapper,
+    });
+    await result.current.mutateAsync({ budget: 5 });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ config: "x\n", budget: 5 });
   });
 
   it("surfaces the grimoire's not-implemented answer as an ApiError", async () => {

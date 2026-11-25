@@ -11,6 +11,7 @@ export interface ConfigRequest {
 }
 
 export interface ProveRequest extends ConfigRequest {
+  sample?: string; // a built-in sample name: the engine runs its golden flows (prove and grimoire)
   budget?: number; // examples per context, 1 to 20,000; wins over profile
   seed?: number;
   profile?: "dev" | "ci" | "demo";

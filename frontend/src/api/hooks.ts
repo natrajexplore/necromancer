@@ -20,6 +20,15 @@ function request(crypt: Crypt) {
   return crypt.dialect ? { config: crypt.config, dialect: crypt.dialect } : { config: crypt.config };
 }
 
+/**
+ * Bundled samples name themselves, so the engine can run their golden flows without the UI
+ * sending them. Only prove and grimoire use the golden flows. An upload has none.
+ */
+function withSample(crypt: Crypt) {
+  const prefix = "sample:";
+  return crypt.id.startsWith(prefix) ? { ...request(crypt), sample: crypt.id.slice(prefix.length) } : request(crypt);
+}
+
 /** Never retry a 4xx (same input, same answer) or a rate limit; retry other failures once. */
 export function shouldRetry(failures: number, error: unknown): boolean {
   if (error instanceof ApiError && (error.isClientError || error.status === 0)) return false;
@@ -88,7 +97,7 @@ export function useProve(crypt: Crypt) {
   return useMutation({
     mutationKey: ["prove", crypt.id],
     mutationFn: (options: Omit<ProveRequest, "config" | "dialect">) =>
-      api.prove({ ...request(crypt), ...options }),
+      api.prove({ ...withSample(crypt), ...options }),
   });
 }
 
@@ -96,6 +105,6 @@ export function useProve(crypt: Crypt) {
 export function useGrimoire(crypt: Crypt) {
   return useMutation({
     mutationKey: ["grimoire", crypt.id],
-    mutationFn: () => api.grimoire(request(crypt)),
+    mutationFn: () => api.grimoire(withSample(crypt)),
   });
 }

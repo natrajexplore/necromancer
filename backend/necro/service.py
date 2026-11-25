@@ -14,14 +14,14 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime
 from typing import Literal
 
-from necro import report
+from necro import report, samples
 from necro.assessment import Assessment, assemble, compute_core
 from necro.audit import DEFAULT_INPUT_NAME, sha256_text, utc_now
 from necro.autopsy import analyze
 from necro.coverage import Coverage, compute_coverage
 from necro.emitters import emit_panos
 from necro.gate_models import Sidecar
-from necro.golden import GoldenVector, parse_golden
+from necro.golden import GoldenVector, load_golden, parse_golden
 from necro.haunt import HauntError, haunt_candidate
 from necro.ir import Dialect, ParseError, Policy
 from necro.oracle import (
@@ -265,6 +265,27 @@ def parse_golden_text(text: str | None) -> list[GoldenVector]:
         return parse_golden(text)
     except (ValueError, KeyError, tomllib.TOMLDecodeError) as exc:
         raise NecroError("invalid-golden", f"cannot read the golden flows: {exc}") from exc
+
+
+def golden_for(sample: str | None, text: str | None = None) -> list[GoldenVector]:
+    """Golden flows for a request: explicit TOML text wins, else a built-in sample's file.
+
+    An unknown sample name is an input error, so a typo cannot silently run zero flows.
+    """
+    if text:
+        return parse_golden_text(text)
+    if not sample:
+        return []
+    path = samples.golden_path(sample)
+    if path is None:
+        known = ", ".join(samples.sample_names()) or "none found"
+        raise NecroError("unknown-sample", f"no built-in sample named {sample!r} (known: {known})")
+    try:
+        return load_golden(path)
+    except (OSError, ValueError, KeyError, tomllib.TOMLDecodeError) as exc:
+        raise NecroError(
+            "invalid-golden", f"cannot read the golden flows of {sample}: {exc}"
+        ) from exc
 
 
 def assess(

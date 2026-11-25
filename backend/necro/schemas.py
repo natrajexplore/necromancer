@@ -36,12 +36,15 @@ class ProveRequest(ConfigRequest):
     seed: int | None = Field(default=None, ge=0, le=2**63 - 1)
     profile: str | None = None
     haunt: bool = False  # demo: prove a deliberately broken candidate (necro.haunt); prove only
+    # name of a built-in sample: its golden flows from samples/golden-flows run first
+    sample: str | None = Field(default=None, max_length=64, pattern=r"^[a-z0-9][a-z0-9.-]*$")
 
 
 class GateRequest(ProveRequest):
     """Gates and the report. ``budget`` and ``profile`` default to the ``ci`` budget, because a
     GO verdict needs it. ``sidecar`` carries waivers, accepted risks, ledger decisions and the
-    change record; the hosted demo does not store it. ``golden`` is golden-flow TOML text."""
+    change record; the hosted demo does not store it. ``golden`` is golden-flow TOML text and
+    beats the golden flows of ``sample``."""
 
     sidecar: Sidecar | None = None
     golden: str | None = Field(default=None, max_length=MAX_GOLDEN_CHARS)

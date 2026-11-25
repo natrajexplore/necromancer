@@ -52,15 +52,25 @@ def prove(
     seed: int | None = None,
     profile: str | None = None,
     haunt: bool = False,
+    sample: str | None = None,
 ) -> dict[str, Any]:
     """Proof of Life: compare original and resurrected behaviour over generated flows.
 
     ``haunt`` is a demo switch: it proves a deliberately broken candidate and answers
-    ``haunted: true``. Never use a haunted result for a migration.
+    ``haunted: true``. Never use a haunted result for a migration. ``sample`` names a built-in
+    sample (for example ``pix-2006-hq``) whose golden flows run first.
     """
     return _guarded(
         lambda: _dump(
-            service.prove(config, dialect, budget=budget, seed=seed, profile=profile, haunt=haunt)
+            service.prove(
+                config,
+                dialect,
+                budget=budget,
+                seed=seed,
+                profile=profile,
+                golden=service.golden_for(sample),
+                haunt=haunt,
+            )
         )
     )
 
@@ -82,12 +92,14 @@ def gate(
     profile: str | None = None,
     sidecar: dict[str, Any] | None = None,
     golden: str | None = None,
+    sample: str | None = None,
 ) -> dict[str, Any]:
     """Readiness gates G1-G6 and the GO / CONDITIONAL / NO-GO verdict with blocking reasons.
 
     Defaults to the ci budget (5,000 examples per context), which a GO verdict needs. ``sidecar``
     holds waivers, accepted_risks, ledger_decisions, change and runbook overrides. ``golden`` is
-    golden-flow TOML text."""
+    golden-flow TOML text. ``sample`` names a built-in sample whose golden flows run when
+    ``golden`` is empty."""
     return _guarded(
         lambda: _dump(
             service.gate(
@@ -97,7 +109,7 @@ def gate(
                 budget=budget,
                 seed=seed,
                 profile=profile,
-                golden=service.parse_golden_text(golden),
+                golden=service.golden_for(sample, golden),
             )
         )
     )

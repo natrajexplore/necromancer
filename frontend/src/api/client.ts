@@ -123,6 +123,6 @@ export const api = {
     post<ResurrectResult>("/v1/resurrect", body, signal),
   prove: (body: ProveRequest, signal?: AbortSignal) =>
     post<ProveResult>("/v1/prove", body, signal),
-  grimoire: (body: ConfigRequest, signal?: AbortSignal) =>
+  grimoire: (body: ProveRequest, signal?: AbortSignal) =>
     post<GrimoireResult>("/v1/grimoire", body, signal),
 };

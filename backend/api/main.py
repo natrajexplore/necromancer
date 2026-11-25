@@ -49,7 +49,7 @@ def _assess(body: GateRequest) -> Assessment:
         budget=body.budget,
         seed=body.seed,
         profile=body.profile,
-        golden=service.parse_golden_text(body.golden),
+        golden=service.golden_for(body.sample, body.golden),
         input_name=body.name or DEFAULT_INPUT_NAME,
     )
 
@@ -94,6 +94,7 @@ def build_v1() -> APIRouter:
             budget=body.budget,
             seed=body.seed,
             profile=body.profile,
+            golden=service.golden_for(body.sample),
             haunt=body.haunt,
         )
         _counts(

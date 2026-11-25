@@ -24,7 +24,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from necro import cli_format, report, service
+from necro import cli_format, report, samples, service
 from necro.assessment import Assessment
 from necro.gate_models import Sidecar, load_sidecar
 from necro.golden import GoldenVector, load_golden
@@ -57,6 +57,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--golden", type=Path, help="hand-verified flows (TOML) to run first")
     parser.add_argument(
+        "--sample",
+        help="name of a built-in sample whose golden flows run first (default: detected when "
+        "the file is a bundled sample config; --golden wins)",
+    )
+    parser.add_argument(
         "--haunt",
         action="store_true",
         help="prove only: prove a deliberately broken candidate, to show a failed proof "
@@ -80,9 +85,11 @@ def _read(path: Path) -> str:
         raise NecroError("unreadable", f"cannot read {path}: {exc.strerror or exc}") from exc
 
 
-def _golden(path: Path | None) -> list[GoldenVector]:
+def _golden(args: argparse.Namespace) -> list[GoldenVector]:
+    """``--golden`` if given, else the golden flows of the named or detected built-in sample."""
+    path: Path | None = args.golden
     if path is None:
-        return []
+        return service.golden_for(args.sample or samples.sample_of_config(args.file))
     try:
         return load_golden(path)
     except (OSError, ValueError, KeyError, tomllib.TOMLDecodeError) as exc:
@@ -118,7 +125,7 @@ def _assess(args: argparse.Namespace, text: str) -> Assessment:
         budget=args.budget,
         seed=args.seed,
         profile=args.profile,
-        golden=_golden(args.golden),
+        golden=_golden(args),
         input_name=args.file.name,
     )
 
@@ -153,7 +160,7 @@ def _run(args: argparse.Namespace) -> int:
             budget=args.budget,
             seed=args.seed,
             profile=args.profile,
-            golden=_golden(args.golden),
+            golden=_golden(args),
             haunt=args.haunt,
         )
         _emit(proved, cli_format.prove_doc(proved), fmt)
