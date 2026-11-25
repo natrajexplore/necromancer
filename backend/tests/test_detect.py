@@ -33,7 +33,7 @@ def test_samples_are_detected_with_high_confidence(
 ) -> None:
     d = detect(redact(_read(folder, name)))
     assert (d.dialect, d.os_version, d.mode) == (dialect, version, PolicyMode.routed)
-    assert d.confidence >= 0.75
+    assert d.confidence >= 0.95  # a banner that agrees with the syntax
     assert d.signals
 
 
@@ -142,3 +142,36 @@ def test_parse_config_surfaces_group_cycles() -> None:
     with pytest.raises(ParseError) as err:
         parse_config(_read("broken-configs", "asa-group-cycle.cfg"))
     assert err.value.code == "group-cycle"
+
+
+_ACCESS_GROUP = "access-group A in interface outside\n"
+_AGREEING = {
+    "PIX Version 6.3(5)": "nameif ethernet0 outside security0\n" + _ACCESS_GROUP,
+    "PIX Version 7.2(4)": "interface E0\n nameif outside\n" + _ACCESS_GROUP,
+    "ASA Version 9.8(4)": (
+        "interface E0\n nameif outside\naccess-list A extended permit ip any any\n"
+    ),
+    "version 12.4": "ip access-list extended A\nline vty 0 4\nip route 0.0.0.0 0.0.0.0 192.0.2.1\n",
+}
+
+
+@pytest.mark.parametrize("banner", list(_AGREEING))
+def test_a_banner_that_agrees_with_the_syntax_gives_at_least_0_95(banner: str) -> None:
+    d = detect(banner + "\n" + _AGREEING[banner])
+    assert d.dialect is not None and d.confidence >= 0.95
+
+
+def test_a_banner_that_the_syntax_contradicts_stays_below_the_floor() -> None:
+    """An ASA banner over IOS-only syntax is not consistent evidence."""
+    ios_only = (
+        "ip access-list extended A\nline vty 0 4\nip route 0.0.0.0 0.0.0.0 1.1.1.1\n"
+        "ip access-list standard B\nservice timestamps debug\n"
+    )
+    assert detect("ASA Version 9.8(4)\n" + ios_only).confidence < 0.95
+
+
+@given(st.text(alphabet="abcdef \n!-.", max_size=200))
+def test_pbt_a_lone_banner_with_noise_never_drops_below_the_floor(noise: str) -> None:
+    """Text that gives no dialect any evidence cannot dilute a banner."""
+    d = detect("ASA Version 9.8(4)\n" + "\n".join(f"! {line}" for line in noise.splitlines()))
+    assert d.dialect == Dialect.asa and d.confidence >= 0.95

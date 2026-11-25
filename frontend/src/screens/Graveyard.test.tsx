@@ -111,6 +111,23 @@ describe("Graveyard", () => {
     expect(screen.getByLabelText("Or paste a config")).toHaveValue("");
   });
 
+  it("cuts 0.895 off at 0.89 instead of rounding it to the 0.90 that gate G1 asks for", async () => {
+    mockApi({
+      ...HEALTH,
+      "/v1/exhume": () => json(exhumeResult({ dialect: "pix", os_version: "6.3(5)", detection_confidence: 0.895 })),
+    });
+    const user = renderApp();
+    await user.type(screen.getByLabelText("Or paste a config"), "PIX Version 6.3(5)");
+    await user.click(screen.getByRole("button", { name: "Exhume" }));
+
+    const tombstone = await screen.findByRole("button", { name: /^Pasted config 1:/ });
+    expect(tombstone).toHaveTextContent("confidence 0.89");
+    expect(tombstone).not.toHaveTextContent("0.90");
+    const details = await screen.findByRole("region", { name: "Pasted config 1" });
+    expect(details).toHaveTextContent("0.89");
+    expect(details).toHaveTextContent("Below 0.90");
+  });
+
   it("shows a parse error with its line number and adds no tombstone", async () => {
     mockApi({
       ...HEALTH,

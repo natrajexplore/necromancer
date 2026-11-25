@@ -2,7 +2,9 @@
 
 Detection is evidence-based: an explicit version banner is strong evidence, command shapes that
 only one platform uses are weak evidence. The confidence is in [0, 1] and shrinks when another
-dialect also has evidence. Nothing here guesses silently; a config with no evidence gets
+dialect also has evidence. A ``PIX Version``, ``ASA Version`` or IOS ``version`` banner that agrees
+with the syntax (the banner's dialect wins and no other dialect has as much evidence as the banner
+alone) gives at least 0.95. Nothing here guesses silently; a config with no evidence gets
 ``dialect=None`` and confidence 0.
 """
 
@@ -17,6 +19,7 @@ _STRONG = 10
 _BANNER = 8
 _IOS_VERSION = 6
 _IOS_ACL_WORDS = ("extended", "standard")
+_BANNER_CONFIDENCE = 0.95  # floor when a version banner agrees with the rest of the syntax
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,12 @@ class _Scores:
         self.signals: list[str] = []
         self.version = ""
         self.banner = False
+        self.banner_dialect: Dialect | None = None  # dialect named by a version banner
+        self.banner_weight = 0
+
+    def note_banner(self, dialect: Dialect, weight: int) -> None:
+        if self.banner_dialect is None:
+            self.banner_dialect, self.banner_weight = dialect, weight
 
     def add(self, dialect: Dialect, weight: int, signal: str) -> None:
         self.points[dialect] += weight
@@ -69,12 +78,15 @@ def _banner_signal(scores: _Scores, tokens: list[str], head: list[str]) -> bool:
         dialect = Dialect.pix if 0 <= _major(tokens[2]) < 7 else Dialect.asa
         scores.add(dialect, _STRONG, "PIX Version banner")
         scores.version, scores.banner = tokens[2], True
+        scores.note_banner(dialect, _STRONG)
     elif len(tokens) >= 3 and head[:2] == ["asa", "version"]:
         scores.add(Dialect.asa, _STRONG, "ASA Version banner")
         scores.version, scores.banner = tokens[2], True
+        scores.note_banner(Dialect.asa, _STRONG)
     elif len(tokens) == 2 and head[0] == "version" and _major(tokens[1]) > 0:
         scores.add(Dialect.ios, _IOS_VERSION, "version banner")
         scores.version = scores.version or tokens[1]
+        scores.note_banner(Dialect.ios, _IOS_VERSION)
     elif "adaptive" in head and "security" in head:
         scores.add(Dialect.asa, _BANNER, "Adaptive Security Appliance banner")
     else:
@@ -130,5 +142,10 @@ def _conclude(scores: _Scores, mode: PolicyMode) -> Detection:
     if top == 0:
         return Detection(None, "", mode, 0.0, tuple(scores.signals))
     base = 0.98 if scores.banner else min(0.85, 0.3 + 0.1 * top)
-    confidence = round(max(0.0, min(1.0, base * top / (top + second))), 3)
+    confidence = max(0.0, min(1.0, base * top / (top + second)))
+    # A version banner that names the winning dialect, with no other dialect's syntax outweighing
+    # the banner itself, is consistent evidence: the banner share does not dilute it.
+    if scores.banner_dialect == best and second < scores.banner_weight:
+        confidence = max(confidence, _BANNER_CONFIDENCE)
+    confidence = round(confidence, 3)
     return Detection(best, scores.version, mode, confidence, tuple(scores.signals))

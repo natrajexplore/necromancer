@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from "react";
 
 import { useExhume, type Crypt } from "../api/hooks";
 import type { ExhumeResult } from "../api/types";
-import { dialectLabel, percent, plural } from "../lib/format";
+import { confidence, dialectLabel, percent, plural } from "../lib/format";
 import { Autopsy } from "../screens/Autopsy";
 import { ProofOfLife } from "../screens/ProofOfLife";
 import { Resurrection } from "../screens/Resurrection";
@@ -30,7 +30,7 @@ function Summary({ result }: { result: ExhumeResult }) {
     <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <Fact term="Dialect">{dialectLabel(result.dialect, result.os_version)}</Fact>
       <Fact term="Detection confidence">
-        {result.detection_confidence.toFixed(2)}
+        {confidence(result.detection_confidence)}
         {result.detection_confidence < MIN_CONFIDENCE && (
           <span className="block text-sm text-candle">
             Below 0.90: the input-integrity gate (G1) will not pass without a reviewer confirming

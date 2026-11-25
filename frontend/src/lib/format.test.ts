@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dialectLabel, percent, plural } from "./format";
+import { confidence, dialectLabel, percent, plural } from "./format";
 
 describe("format", () => {
   it("names platforms in plain text", () => {
@@ -13,6 +13,16 @@ describe("format", () => {
     expect(percent(0.9996)).toBe("99.9%");
     expect(percent(0.514)).toBe("51.4%");
     expect(percent(0)).toBe("0%");
+  });
+
+  it("cuts a detection confidence off at two decimals, so 0.895 never reads as 0.90", () => {
+    expect(confidence(0.895)).toBe("0.89");
+    expect(confidence(0.899)).toBe("0.89");
+    expect(confidence(0.9)).toBe("0.90");
+    expect(confidence(0.95)).toBe("0.95");
+    expect(confidence(0.985)).toBe("0.98");
+    expect(confidence(1)).toBe("1.00");
+    expect(confidence(0)).toBe("0.00");
   });
 
   it("pluralises counts", () => {

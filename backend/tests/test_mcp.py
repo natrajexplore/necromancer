@@ -136,5 +136,5 @@ def test_the_server_speaks_mcp_over_stdio_via_python_dash_m() -> None:
     assert replies[1]["result"]["serverInfo"]["name"] == "necromancer"
     assert {t["name"] for t in replies[2]["result"]["tools"]} == TOOLS
     content = json.loads(replies[3]["result"]["content"][0]["text"])
-    assert content["verdict"]["value"] == "NO-GO"  # PIX 6.3 is detected below 0.9 confidence
+    assert content["verdict"]["value"] == "NO-GO"  # proof below the ci budget, ledger undecided
     assert [g["gate"] for g in content["verdict"]["gates"]] == ["G1", "G2", "G3", "G4", "G5", "G6"]

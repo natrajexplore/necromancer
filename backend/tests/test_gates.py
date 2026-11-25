@@ -105,10 +105,11 @@ def test_g1_needs_a_detection_confidence_of_at_least_0_9(
         assert "below 0.9" in gate.blocking_reasons[0]
 
 
-def test_g1_fails_on_the_auto_detected_pix_sample_below_the_threshold() -> None:
+def test_g1_passes_on_the_auto_detected_pix_sample() -> None:
+    """Its PIX Version banner agrees with the syntax, so detection gives at least 0.95."""
     policy = parse_config((SAMPLES / "pix-2006-hq.cfg").read_text(encoding="utf-8"))
-    assert policy.detection_confidence < 0.9
-    assert gate_g1(policy).status == "fail"
+    assert policy.detection_confidence >= 0.95
+    assert gate_g1(policy).status == "pass"
 
 
 @pytest.mark.parametrize(

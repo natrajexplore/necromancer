@@ -4,7 +4,7 @@ import { useExhume, type Crypt } from "../api/hooks";
 import { CryptDetails } from "../components/CryptDetails";
 import { ExhumeZone } from "../components/ExhumeZone";
 import { Tombstone } from "../components/Tombstone";
-import { dialectLabel, percent, plural } from "../lib/format";
+import { confidence, dialectLabel, percent, plural } from "../lib/format";
 import { SAMPLES } from "../samples";
 
 /** Requirement 1.3: said plainly, outside the theme, on the landing screen. */
@@ -28,10 +28,10 @@ function UploadTombstone({ crypt, selected, onSelect }: { crypt: Crypt; selected
       title={crypt.name}
       selected={selected}
       onSelect={onSelect}
-      label={`${crypt.name}: ${dialectLabel(data.dialect, data.os_version)}, detection confidence ${data.detection_confidence.toFixed(2)}, coverage ${percent(data.coverage.ratio)}, ${plural(data.unparsed.length, "line")} not migrated, ${relevant} security-relevant`}
+      label={`${crypt.name}: ${dialectLabel(data.dialect, data.os_version)}, detection confidence ${confidence(data.detection_confidence)}, coverage ${percent(data.coverage.ratio)}, ${plural(data.unparsed.length, "line")} not migrated, ${relevant} security-relevant`}
       lines={[
         dialectLabel(data.dialect, data.os_version),
-        `confidence ${data.detection_confidence.toFixed(2)}`,
+        `confidence ${confidence(data.detection_confidence)}`,
         `coverage ${percent(data.coverage.ratio)}`,
         relevant > 0 ? (
           <>
