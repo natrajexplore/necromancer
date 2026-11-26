@@ -1,0 +1,308 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  NECROMANCER demo: FastAPI on Lambda behind an API Gateway HTTP API, the React UI on a private S3 bucket
+  behind CloudFront, and a USD 1 budget alarm. Deploy with deploy.ps1 (see DEPLOY.md).
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Description: E-mail address that receives the AWS Budgets alerts. Required, no default.
+    AllowedPattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+    ConstraintDescription: Must be an e-mail address.
+  BudgetLimitUsd:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    Description: Monthly cost budget in USD. The alarm fires at 100 percent of actual and of forecasted spend.
+  GitCommit:
+    Type: String
+    Default: unknown
+    MaxLength: 40
+    Description: Git commit reported by GET /healthz. deploy.ps1 sets it.
+  ThrottleRateLimit:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    Description: >-
+      Steady requests per second for the whole API (all clients together). HTTP APIs cannot throttle
+      per client IP, so the 10 POSTs/minute/IP limit from security.md is enforced in the app.
+  ThrottleBurstLimit:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: Burst size for the whole API.
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90]
+    Description: CloudWatch Logs retention for the Lambda function.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [x86_64]
+
+Resources:
+  # ---------------------------------------------------------------- backend
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !Ref LogRetentionDays
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: NECROMANCER FastAPI app through the mangum adapter (backend/api/main.py).
+      CodeUri: build/lambda-src/
+      Handler: api.main.handler
+      MemorySize: 1769 # one full vCPU: the Proof of Life oracle is CPU-bound
+      Timeout: 28 # HTTP API integrations time out at 29-30 s; leave room for the response
+      EphemeralStorage:
+        Size: 512
+      LoggingConfig:
+        LogGroup: !Ref ApiLogGroup
+        LogFormat: JSON
+        ApplicationLogLevel: INFO
+        SystemLogLevel: WARN
+      Environment:
+        Variables:
+          NECRO_GIT_COMMIT: !Ref GitCommit
+          NECRO_SAMPLES_DIR: /var/task/samples
+          HYPOTHESIS_STORAGE_DIRECTORY: /tmp/hypothesis # /var/task is read-only
+      Events:
+        Healthz:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /healthz
+            Method: GET
+        V1Get:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/{proxy+}
+            Method: GET
+        V1Post:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/{proxy+}
+            Method: POST
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Description: NECROMANCER API (CloudFront forwards /v1/* and /healthz here).
+      DefaultRouteSettings:
+        ThrottlingRateLimit: !Ref ThrottleRateLimit
+        ThrottlingBurstLimit: !Ref ThrottleBurstLimit
+
+  # ---------------------------------------------------------------- frontend
+  UiBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: abort-incomplete-uploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  UiBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UiBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${UiBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}"
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt UiBucket.Arn
+              - !Sub "${UiBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  UiOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${AWS::StackName}-ui"
+        Description: CloudFront signs requests to the private UI bucket.
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # Security headers for the UI. style-src allows 'unsafe-inline' only because the print-ready report
+  # (a blob: page opened by the UI) inherits this policy and styles itself with one inline <style>.
+  UiHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub "${AWS::StackName}-ui-headers"
+        Comment: CSP, nosniff and no-referrer for the static UI.
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            Override: true
+            ContentSecurityPolicy: >-
+              default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self';
+              img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+          ContentTypeOptions:
+            Override: true
+          ReferrerPolicy:
+            Override: true
+            ReferrerPolicy: no-referrer
+          FrameOptions:
+            Override: true
+            FrameOption: DENY
+          StrictTransportSecurity:
+            Override: true
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: false
+            Preload: false
+
+  # Same three headers for /v1 and /healthz. The app sets them too (Override: false keeps the app's value);
+  # this covers responses that API Gateway itself generates, such as 404 and 429 throttling.
+  ApiHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub "${AWS::StackName}-api-headers"
+        Comment: CSP, nosniff and no-referrer for API responses.
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            Override: false
+            ContentSecurityPolicy: "default-src 'none'; frame-ancestors 'none'"
+          ContentTypeOptions:
+            Override: false
+          ReferrerPolicy:
+            Override: false
+            ReferrerPolicy: no-referrer
+          StrictTransportSecurity:
+            Override: false
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: false
+            Preload: false
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub "${AWS::StackName}: UI from S3, /v1 and /healthz from the API"
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        Origins:
+          - Id: ui
+            DomainName: !GetAtt UiBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt UiOriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+          - Id: api
+            DomainName: !Sub "${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}"
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+              OriginReadTimeout: 30
+        DefaultCacheBehavior:
+          TargetOriginId: ui
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # managed: CachingOptimized
+          ResponseHeadersPolicyId: !Ref UiHeadersPolicy
+        CacheBehaviors:
+          - PathPattern: /v1/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE] # CloudFront needs all seven to allow POST
+            CachedMethods: [GET, HEAD]
+            Compress: true
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # managed: CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-42a1-b4d7-e6eb4b8bbbd6 # managed: AllViewerExceptHostHeader
+            ResponseHeadersPolicyId: !Ref ApiHeadersPolicy
+          - PathPattern: /healthz
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            Compress: true
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # managed: CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-42a1-b4d7-e6eb4b8bbbd6 # managed: AllViewerExceptHostHeader
+            ResponseHeadersPolicyId: !Ref ApiHeadersPolicy
+
+  # ---------------------------------------------------------------- cost guard
+  CostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${AWS::StackName}-monthly-cost"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref BudgetLimitUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+Outputs:
+  SiteUrl:
+    Description: The UI. /v1 and /healthz on the same host go to the API.
+    Value: !Sub "https://${Distribution.DomainName}"
+  HealthUrl:
+    Description: Health check through CloudFront (version and commit).
+    Value: !Sub "https://${Distribution.DomainName}/healthz"
+  UiBucketName:
+    Description: Private bucket that deploy.ps1 syncs frontend/dist into.
+    Value: !Ref UiBucket
+  DistributionId:
+    Description: CloudFront distribution to invalidate after a UI upload.
+    Value: !Ref Distribution
+  ApiEndpoint:
+    Description: Direct API Gateway endpoint (bypasses CloudFront; same throttling).
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}"
