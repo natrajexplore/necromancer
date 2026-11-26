@@ -38,7 +38,8 @@ FAR = date(2027, 12, 31)
 FORBIDDEN = re.compile(r"compliant|safe\s+to\s+deploy", re.IGNORECASE)
 FAST_BUDGET = 60  # examples per context for tests that do not need a verdict above NO-GO
 
-# A lab config with no critical finding: with its two to-the-box entries decided it reaches GO.
+# A lab config with no critical finding. Telnet narrows the inside profile to 10.0.0.0/24, so ICMP
+# from other sources changes decision: with that one to-the-box entry decided it reaches GO.
 GO_CONFIG = """ASA Version 8.2(5)
 hostname lab-fw
 interface Ethernet0/0
@@ -56,6 +57,7 @@ access-list OUT_IN remark nothing is allowed in
 access-list OUT_IN extended deny ip any any log
 access-group IN_OUT in interface inside
 access-group OUT_IN in interface outside
+telnet 10.0.0.0 255.255.255.0 inside
 """
 
 

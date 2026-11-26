@@ -275,9 +275,21 @@ def test_g5_fails_on_a_pending_entry_including_informational_ones() -> None:
     assert gate.blocking_reasons == ["LED-0001 (to-the-box) is pending a decision"]
 
 
-def test_g5_fails_on_the_emitted_sample_ledger(emission: PanosEmission) -> None:
-    gate = gate_g5(emission.ledger, NO_SIDECAR, TODAY)
-    assert gate.status == "fail" and len(gate.blocking_reasons) == len(emission.ledger)
+def test_g5_passes_when_the_emitted_sample_ledger_records_no_difference(
+    emission: PanosEmission,
+) -> None:
+    # every to-the-box flow of asa-8.2-branch is decided alike, so those are notes, not entries
+    assert emission.ledger == []
+    assert gate_g5(emission.ledger, NO_SIDECAR, TODAY).status == "pass"
+
+
+def test_g5_fails_on_each_real_difference_of_an_emitted_sample_ledger() -> None:
+    ledger = emit_panos(sample("pix-2006-hq.cfg", Dialect.pix)).ledger
+    assert [(e.entry_class, e.old_action, e.new_action) for e in ledger] == [
+        (LedgerClass.to_the_box, Action.permit, Action.deny)
+    ]
+    gate = gate_g5(ledger, NO_SIDECAR, TODAY)
+    assert gate.status == "fail" and len(gate.blocking_reasons) == len(ledger)
 
 
 def test_g5_a_sidecar_decision_overrides_the_entry_state() -> None:

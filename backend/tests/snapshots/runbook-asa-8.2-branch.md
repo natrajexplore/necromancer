@@ -94,8 +94,8 @@ Run these on the source before the freeze ends, to compare with the baseline. pa
 
 | ID | Origin | Context | Flow | Expected result | Why |
 |---|---|---|---|---|---|
-| ORC-0007 | oracle | outside:in | tcp 198.51.100.5:65535 -> 198.51.100.2:65535 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
-| ORC-0009 | oracle | inside:in | tcp 172.16.10.1:65535 -> 198.51.100.2:80 | deny by rule implicit-deny; ledger LED-0004 | traffic to the device itself follows the interface management profile |
+| ORC-0007 | oracle | outside:in | tcp 198.51.100.5:65535 -> 198.51.100.2:65535 | deny by rule implicit-deny | traffic to the device itself follows the interface management profile |
+| ORC-0009 | oracle | inside:in | tcp 172.16.10.1:65535 -> 198.51.100.2:80 | deny by rule implicit-deny | traffic to the device itself follows the interface management profile |
 
 ### Rollback (P9)
 
@@ -128,9 +128,5 @@ Hypercare lasts 10 business days. Rules and entries to watch:
 
 | Subject | Reason |
 |---|---|
-| ledger LED-0001 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source permits these flows and the profile admits them.. Affected: icmp any -> 198.51.100.2/32 |
-| ledger LED-0002 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source denies these flows and the profile does not admit them.. Affected: tcp any -> 172.16.10.1/32 and 1 more; udp any -> 172.16.10.1/32 and 1 more; icmp any -> 172.16.10.1/32; and 1 more |
-| ledger LED-0003 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source permits these flows and the profile admits them.. Affected: icmp any -> 172.16.10.1/32 |
-| ledger LED-0004 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source denies these flows and the profile does not admit them.. Affected: tcp any -> 172.16.10.1/32 and 1 more; udp any -> 172.16.10.1/32 and 1 more; icmp any -> 198.51.100.2/32; and 1 more |
 | candidate rule necro-final-deny | not exercised by the proof in context outside:in (88.9% of active rules hit) |
 | candidate rule necro-final-deny | not exercised by the proof in context inside:in (80% of active rules hit) |

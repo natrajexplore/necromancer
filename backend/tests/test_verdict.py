@@ -259,7 +259,8 @@ def test_the_sample_without_decisions_is_no_go_with_reasons_in_gate_order(run: R
     assert verdict.value == "NO-GO"
     gates = [r.split(":", 1)[0] for r in verdict.blocking_reasons]
     assert gates == sorted(gates, key=GATE_IDS.index)
-    assert set(gates) == {"G4", "G5", "G6"}
+    # G5 passes: the sample's ledger is empty, since its to-the-box flows decide alike
+    assert set(gates) == {"G4", "G6"}
     assert verdict.blocking_reasons[0] == "G4: no equivalence proof was run"
 
 

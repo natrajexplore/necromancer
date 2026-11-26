@@ -108,7 +108,9 @@ def emit_panos(policy: Policy) -> PanosEmission:
         specs += context_specs(env, ctx)
     specs.append(final_deny_spec())
     plan = plan_management(env)
-    env.ledger += to_the_box_entries(env, plan)
+    box_entries, box_notes = to_the_box_entries(env, plan)
+    env.ledger += box_entries
+    env.notes += box_notes
 
     objects = ObjectTable(policy.name_aliases)
     names = NameRegistry()

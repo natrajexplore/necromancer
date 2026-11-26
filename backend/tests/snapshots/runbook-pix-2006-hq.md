@@ -71,8 +71,8 @@ packet-tracer is not available on PIX 6.3(5) (it needs ASA 7.2 or later), so no 
 
 | ID | Origin | Context | Flow | Expected result | Why |
 |---|---|---|---|---|---|
-| ORC-0007 | oracle | outside:in | icmp 198.51.100.1 -> 198.51.100.1 type 0 | allow by rule mgmt-profile:ping; ledger LED-0001 | traffic to the device itself follows the interface management profile |
-| ORC-0008 | oracle | outside:in | icmp 198.51.100.1 -> 10.10.0.1 type 0 | deny by rule implicit-deny; ledger LED-0002 | traffic to the device itself follows the interface management profile |
+| ORC-0007 | oracle | outside:in | icmp 198.51.100.1 -> 198.51.100.1 type 0 | allow by rule mgmt-profile:ping | traffic to the device itself follows the interface management profile |
+| ORC-0008 | oracle | outside:in | icmp 198.51.100.1 -> 10.10.0.1 type 0 | deny by rule implicit-deny | traffic to the device itself follows the interface management profile |
 
 ### Rollback (P9)
 
@@ -105,13 +105,7 @@ Hypercare lasts 10 business days. Rules and entries to watch:
 
 | Subject | Reason |
 |---|---|
-| ledger LED-0001 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source permits these flows and the profile admits them.. Affected: icmp any -> 198.51.100.1/32 |
-| ledger LED-0002 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source denies these flows and the profile does not admit them.. Affected: tcp any -> 10.10.0.1/32 and 2 more; udp any -> 10.10.0.1/32 and 2 more; icmp any -> 10.10.0.1/32 and 1 more; and 1 more |
-| ledger LED-0003 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source permits these flows and the profile admits them.. Affected: tcp 10.10.0.0/16 -> 10.10.0.1/32 dport 23 |
-| ledger LED-0004 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source model permits these flows but no management service of the emitted profile admits them, so PAN-OS denies them.. Affected: icmp any -> 10.10.0.1/32 |
-| ledger LED-0005 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source denies these flows and the profile does not admit them.. Affected: tcp 0.0.0.0/5 and 15 more -> 10.10.0.1/32 and 2 more; tcp 10.10.0.0/16 -> 192.168.50.1/32 and 1 more; tcp 10.10.0.0/16 -> 10.10.0.1/32 dport 0-22,24-65535; and 3 more |
-| ledger LED-0006 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source permits these flows and the profile admits them.. Affected: icmp any -> 192.168.50.1/32 |
-| ledger LED-0007 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source denies these flows and the profile does not admit them.. Affected: tcp any -> 10.10.0.1/32 and 2 more; udp any -> 10.10.0.1/32 and 2 more; icmp any -> 10.10.0.1/32 and 1 more; and 1 more |
+| ledger LED-0001 (to-the-box) | Traffic to the device's own addresses is governed by the interface management profile. The source model permits these flows but no management service of the emitted profile admits them, so PAN-OS denies them.. Affected: icmp 0.0.0.0/5 and 15 more -> 10.10.0.1/32 |
 | source rule outside_in#4 | not exercised by the proof in context outside:in (85.7% of active rules hit) |
 | candidate rule outside_in-4 | not exercised by the proof in context outside:in (75% of active rules hit) |
 | candidate rule necro-final-deny | not exercised by the proof in context outside:in (75% of active rules hit) |

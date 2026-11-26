@@ -79,7 +79,7 @@
 - [x] 8.4 Performance check: 10k examples per sample under 15 s; 5k-rule synthetic config parse + autopsy under 5 s
   - _Requirements: 6.5, 8.1_
 
-- [ ] 9. Interfaces
+- [x] 9. Interfaces
 - [x] 9.1 Grimoire report (see migration-governance tasks)
   - _Requirements: 7.1_
 - [x] 9.2 FastAPI `/v1` endpoints + `/healthz` + mangum handler + limits + structured errors + security headers

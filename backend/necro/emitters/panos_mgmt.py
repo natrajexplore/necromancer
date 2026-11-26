@@ -3,7 +3,9 @@
 Policy-semantics 1.3: to-the-box access is never a security rule. It maps to one PAN-OS interface
 management profile per receiving interface: the enabled services plus a single ``permitted-ip``
 list. A profile cannot give two services different source lists, so the list is the union, and the
-widening it causes is recorded as a ``to-the-box`` ledger entry.
+flows whose decision changes are recorded as ``to-the-box`` ledger entries. Flows the source and
+the profile decide alike are reported as notes, not ledger entries: the ledger holds only
+behaviour differences.
 
 Inputs are the source's management commands (ASA ``telnet``/``ssh``/``http``/``icmp``/
 ``snmp-server host``; IOS ``vty``, SNMP and HTTP lines) and, on IOS only, permit rules whose
@@ -22,7 +24,7 @@ from necro.emitters.panos_names import NameRegistry
 from necro.emitters.panos_network import device_addresses
 from necro.emitters.panos_objects import name_list
 from necro.ir import Action, Context, Dialect, LedgerClass, Match, Policy
-from necro.ledger import LedgerEntry, make_entry
+from necro.ledger import LedgerEntry, describe_regions, make_entry
 from necro.mgmt import (
     SERVICE_NAMES,
     access_services,
@@ -119,10 +121,10 @@ def plan_management(env: BuildEnv) -> MgmtPlan:
 def _pix_asa_access(env: BuildEnv, access: Access, addresses: Addresses) -> None:
     """``http`` lines (when the server is enabled) and the ``icmp`` lists of PIX/ASA.
 
-    ``ping`` joins a profile only when its sources fit inside what the profile's other services
-    already admit. The profile has one ``permitted-ip`` list for every service, so a wider ping
-    list would widen telnet/ssh/https/snmp for those sources. That is a security loss, so the
-    flows that need it stay denied on PAN-OS and the ``to-the-box`` ledger lists them.
+    The profile has one ``permitted-ip`` list for every service, so a ping list wider than what
+    the other services admit would widen telnet/ssh/https/snmp for those sources. That is a
+    security loss, so ``ping`` is enabled only for the sources both lists share. ICMP from the
+    other sources stays denied on PAN-OS and the ``to-the-box`` ledger lists it.
     """
     policy = env.policy
     if policy.http_server_enabled:
@@ -141,8 +143,9 @@ def _pix_asa_access(env: BuildEnv, access: Access, addresses: Addresses) -> None
         others = AddrSet()
         for service_sources in access.get(zone, {}).values():
             others = others.union(service_sources)
-        if others.is_empty() or others.covers(sources):
-            _add(access, zone, "ping", sources)
+        shared = sources if others.is_empty() else sources.intersect(others)
+        if not shared.is_empty():
+            _add(access, zone, "ping", shared)
 
 
 def profile_lines(env: BuildEnv, plan: MgmtPlan) -> list[str]:
@@ -195,27 +198,35 @@ def _old_regions(policy: Policy, ctx: Context, whole: list[Box]) -> dict[Action,
 
 _PREFIX = "Traffic to the device's own addresses is governed by the interface management profile. "
 _REASONS = {
-    (Action.permit, Action.permit): _PREFIX
-    + "The source permits these flows and the profile admits them.",
     (Action.permit, Action.deny): _PREFIX
     + "The source model permits these flows but no management service of the emitted profile "
     "admits them, so PAN-OS denies them.",
-    (Action.deny, Action.deny): _PREFIX
-    + "The source denies these flows and the profile does not admit them.",
     (Action.deny, Action.permit): _PREFIX
     + "A profile has one permitted-ip list for all its services, so it admits flows the source "
     "denied (a service from a source that only another service allowed).",
 }
 
 
-def to_the_box_entries(env: BuildEnv, plan: MgmtPlan) -> list[LedgerEntry]:
-    """One entry per (context, old decision, new decision) covering every flow to the device."""
+_SAME = {
+    Action.permit: "the source permits them and the interface management profile admits them",
+    Action.deny: "the source denies them and the interface management profile does not admit them",
+}
+
+
+def to_the_box_entries(env: BuildEnv, plan: MgmtPlan) -> tuple[list[LedgerEntry], list[str]]:
+    """Ledger entries for flows to the device whose decision changes, and notes for the rest.
+
+    Every flow to the device's addresses falls in one (context, old decision, new decision)
+    group. A group whose decisions differ becomes a ledger entry. A group whose decisions agree
+    is no behaviour difference, so it becomes a note and needs no approval.
+    """
     policy = env.policy
     device = device_addresses(policy)
     if device.is_empty():
-        return []
+        return [], []
     whole = boxes_of(Match(dst=device))
     entries: list[LedgerEntry] = []
+    notes: list[str] = []
     for ctx in build_contexts(policy):
         # the profile of the interface that receives the flow answers it, and no other
         zone = env.zones.of_context(policy, ctx)
@@ -238,15 +249,15 @@ def to_the_box_entries(env: BuildEnv, plan: MgmtPlan) -> list[LedgerEntry]:
                 for rest in subtract_all([piece], admitted):
                     groups.setdefault((old, Action.deny), []).append(rest)
         for (old, new), regions in groups.items():
+            if old == new:
+                notes.append(
+                    f"{ctx.name}: traffic to the device ({describe_regions(regions)}) is "
+                    f"{old.value} on both sides: {_SAME[old]}"
+                )
+                continue
             entries.append(
                 make_entry(
-                    LedgerClass.to_the_box,
-                    _REASONS[(old, new)],
-                    ctx.name,
-                    old,
-                    new,
-                    regions,
-                    informational=old == new,
+                    LedgerClass.to_the_box, _REASONS[(old, new)], ctx.name, old, new, regions
                 )
             )
-    return entries
+    return entries, notes

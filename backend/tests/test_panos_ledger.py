@@ -125,12 +125,14 @@ def test_asa_management_commands_become_one_profile_per_interface() -> None:
     head = "set network profiles interface-management-profile necro-mgmt-inside"
     outside = "set network profiles interface-management-profile necro-mgmt-outside"
     # no icmp line on outside: all ICMP is admitted. On inside the ping sources (any) are wider
-    # than what the other services admit, so ping is left out rather than widening telnet.
+    # than what the other services admit, so ping is enabled for the shared 10.1.0.0/24 only
+    # rather than widening telnet to every source.
     assert profile_lines(emission.lines) == [
         f"{outside} ping yes",
         f"{head} telnet yes",
         f"{head} ssh yes",
         f"{head} https yes",  # ASA 'http' is the ASDM HTTPS server
+        f"{head} ping yes",
         f'{head} permitted-ip "10.1.0.0/24"',
         "set network interface ethernet ethernet1/1 layer3 interface-management-profile "
         "necro-mgmt-outside",
@@ -154,20 +156,19 @@ def test_traffic_to_the_box_is_compared_with_the_profile_not_the_acl() -> None:
     allowed = flow("10.1.0.50", "10.1.0.1", 6, dport=23)
     wrong_port = flow("10.1.0.50", "10.1.0.1", 6, dport=25)
     wrong_source = flow("192.0.2.9", "10.1.0.1", 6, dport=23)
-    assert [
-        (e.old_action, e.new_action, e.informational)
-        for e in covering(emission.ledger, ctx, allowed)
-    ] == [(Action.permit, Action.permit, True)]
-    for denied in (wrong_port, wrong_source):
-        entries = covering(emission.ledger, ctx, denied)
-        assert [(e.old_action, e.new_action, e.informational) for e in entries] == [
-            (Action.deny, Action.deny, True)
-        ]
-        assert all(e.entry_class == LedgerClass.to_the_box for e in entries)
-    # all ICMP is admitted by the source (no icmp line), but a ping entry would widen telnet
-    entries = covering(emission.ledger, ctx, flow("10.1.0.50", "10.1.0.1", 1, icmp_type=8))
-    assert [(e.old_action, e.new_action, e.informational) for e in entries] == [
-        (Action.permit, Action.deny, False)
+    # decided alike on both sides: no ledger entry, only a note
+    for same in (allowed, wrong_port, wrong_source):
+        assert covering(emission.ledger, ctx, same) == []
+    assert any(n.startswith("inside:in: traffic to the device") and "permit on both" in n
+               for n in emission.notes)  # fmt: skip
+    assert any(n.startswith("inside:in: traffic to the device") and "deny on both" in n
+               for n in emission.notes)  # fmt: skip
+    # all ICMP is admitted by the source (no icmp line). Ping from the telnet sources still
+    # matches; from any other source it would widen telnet, so it is denied and on the record.
+    assert covering(emission.ledger, ctx, flow("10.1.0.50", "10.1.0.1", 1, icmp_type=8)) == []
+    entries = covering(emission.ledger, ctx, flow("192.0.2.9", "10.1.0.1", 1, icmp_type=8))
+    assert [(e.entry_class, e.old_action, e.new_action, e.informational) for e in entries] == [
+        (LedgerClass.to_the_box, Action.permit, Action.deny, False)
     ]
 
 
@@ -177,12 +178,23 @@ def test_without_any_management_command_only_icmp_is_admitted_to_the_box() -> No
         "outside ping yes",
         "inside ping yes",
     ]
-    ssh = flow("203.0.113.9", "192.0.2.1", 6, dport=22)
-    entries = covering(emission.ledger, "outside:in", ssh)
-    assert [(e.old_action, e.new_action) for e in entries] == [(Action.deny, Action.deny)]
-    ping = flow("203.0.113.9", "192.0.2.1", 1, icmp_type=8)
-    entries = covering(emission.ledger, "outside:in", ping)
-    assert [(e.old_action, e.new_action) for e in entries] == [(Action.permit, Action.permit)]
+    # ssh is denied and ping permitted on both sides, so nothing differs and the ledger is empty
+    assert emission.ledger == []
+    outside = [n for n in emission.notes if n.startswith("outside:in: traffic to the device")]
+    assert len(outside) == 2
+    assert any("icmp any -> 192.0.2.1/32" in n and "permit on both" in n for n in outside)
+    assert any("deny on both" in n for n in outside)
+
+
+@pytest.mark.parametrize(
+    "name", ["pix-2006-hq.cfg", "asa-8.2-branch.cfg", "asa-9.8-dc.cfg", "ios-12-edge.cfg"]
+)
+def test_the_ledger_holds_only_to_the_box_flows_whose_decision_changes(name: str) -> None:
+    """Flows decided alike on both sides are notes; G5 must not block on them."""
+    emission = emit_panos(policy_of(name))
+    for entry in emission.ledger:
+        if entry.entry_class == LedgerClass.to_the_box:
+            assert entry.old_action != entry.new_action and not entry.informational, entry.id
 
 
 def test_ios_vty_and_snmp_lines_apply_to_every_interface_address() -> None:

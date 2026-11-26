@@ -317,7 +317,11 @@ def test_every_ledger_entry_is_in_the_report_with_its_class_and_a_pending_approv
 ) -> None:
     a = assessment_of(name)
     ledger = report.render_md(a).split("## 6. Exorcism ledger", 1)[1].split("## 7.", 1)[0]
-    assert a.ledger
+    if name == "asa-8.2-branch":
+        # its to-the-box flows decide alike on both sides: notes, not ledger entries
+        assert a.ledger == [] and "The ledger is empty." in ledger
+    else:
+        assert a.ledger
     for entry in a.ledger:
         pattern = rf"^\| {entry.id} \| {re.escape(entry.entry_class.value)}[^|]* \|(.+)$"
         row = re.search(pattern, ledger, flags=re.MULTILINE)

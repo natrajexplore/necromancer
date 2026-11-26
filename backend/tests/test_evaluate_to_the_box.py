@@ -171,17 +171,26 @@ def test_a_config_with_management_lines_proves_equivalent_at_the_ci_budget() -> 
 
 
 def test_the_pix_sample_ledger_only_records_the_unavoidable_ping_widening() -> None:
+    from necro.ledger import covering
     from tests.panos_helpers import policy_of
 
     emission = emit_panos(policy_of("pix-2006-hq.cfg"))
-    changed = [
-        (e.context, e.old_action, e.new_action)
-        for e in emission.ledger
-        if e.entry_class.value == "to-the-box" and not e.informational
-    ]
     # inside admits telnet from 10.10.0.0/16 only. A profile has one permitted-ip list, so ping
-    # (all sources, since the source has no icmp line) is left out instead of opening telnet.
-    assert changed == [("inside:in", Action.permit, Action.deny)]
+    # (all sources, since the source has no icmp line) is enabled for 10.10.0.0/16 alone instead
+    # of opening telnet. ICMP from other sources is the only difference left on the record.
+    assert [(e.entry_class.value, e.context, e.old_action, e.new_action)
+            for e in emission.ledger] == [
+        ("to-the-box", "inside:in", Action.permit, Action.deny)
+    ]  # fmt: skip
+    inside = [ln.split("necro-mgmt-inside ", 1)[1] for ln in emission.lines
+              if "necro-mgmt-inside " in ln and "ethernet" not in ln]  # fmt: skip
+    assert inside == ["telnet yes", "ping yes", 'permitted-ip "10.10.0.0/16"']
+    from_inside = flow("10.10.4.20", "10.10.0.1", 1, icmp=8)
+    from_elsewhere = flow("192.168.50.20", "10.10.0.1", 1, icmp=8)
+    assert covering(emission.ledger, "inside:in", from_inside) == []
+    assert [e.new_action for e in covering(emission.ledger, "inside:in", from_elsewhere)] == [
+        Action.deny
+    ]
 
 
 def test_the_emitter_follows_the_source_icmp_list_and_the_http_server_switch() -> None:
