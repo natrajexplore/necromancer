@@ -185,3 +185,15 @@
 - What Kiro did: Made the ledger keep only to-the-box flows whose decision changes (equal ones become notes), enabled ping on profiles for the shared sources (pix-2006-hq: one entry left), updated tests and snapshots, ticked task 9; pushed 5adf24d.
 - What the human corrected: The human overrode the Oracle-only scope, asked for BOM-free commit messages; Kiro limited the rule to to-the-box entries and flagged the other equal-decision classes.
 - Kiro feature used: specs, hooks, steering, agent, PBT
+
+## 2026-11-27 — CLI
+- Spec task(s): necro-engine/7, graveyard-ui/5
+- What Kiro did: Added remediation proposals and an optional tightening selection to /v1/resurrect, the CLI and MCP, with a separate proved tightened artifact; wired the TighteningPanel and a separate Verdict download; pushed 0a32260.
+- What the human corrected: The human set the checks, trailers and no-BOM rule; Kiro left gate/grimoire out of scope and flagged it.
+- Kiro feature used: specs, hooks, steering, PBT
+
+## 2026-11-27 — CLI
+- Spec task(s): none (vibe)
+- What Kiro did: Checked AWS CLI state (v2.42.2, nothing configured) and gave `aws configure` steps without handling credentials.
+- What the human corrected: Nothing yet.
+- Kiro feature used: hooks
