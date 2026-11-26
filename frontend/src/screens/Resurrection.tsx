@@ -1,11 +1,13 @@
 import { useEffect, useId, useState } from "react";
 
-import { useResurrect, type Crypt } from "../api/hooks";
+import { useResurrect, useTighten, useTightened, type Crypt } from "../api/hooks";
+import type { Proposal } from "../api/types";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { LiveLedger, type Decision, type Decisions } from "../components/LiveLedger";
+import { LiveLedger } from "../components/LiveLedger";
 import { TighteningPanel } from "../components/TighteningPanel";
 import { motionSeconds, usePrefersReducedMotion } from "../lib/motion";
 import { plural } from "../lib/format";
+import { buildSelection, type FindingDecision, type FindingDecisions, type NetworkText } from "../lib/tightening";
 
 /** The rise takes about 2.4 s (requirement 3.1); none at all under reduced motion. */
 export const RISE_SECONDS = 2.4;
@@ -73,8 +75,13 @@ export function Resurrection({ crypt }: { crypt: Crypt }) {
   const reduced = usePrefersReducedMotion();
   const [started, setStarted] = useState(false);
   const [risen, setRisen] = useState(false);
-  const [decisions, setDecisions] = useState<Decisions>({});
+  const [decisions, setDecisions] = useState<FindingDecisions>({});
+  const [networks, setNetworks] = useState<NetworkText>({});
+  const [approver, setApprover] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
   const result = useResurrect(crypt);
+  const tighten = useTighten(crypt);
+  const stored = useTightened(crypt);
   const seconds = motionSeconds(RISE_SECONDS, reduced);
 
   useEffect(() => {
@@ -87,13 +94,23 @@ export function Resurrection({ crypt }: { crypt: Crypt }) {
     return () => window.clearTimeout(timer);
   }, [started, seconds]);
 
-  const decide = (id: string, decision: Decision | null) =>
+  const decide = (id: string, decision: FindingDecision | null) =>
     setDecisions((current) => {
       const next = { ...current };
       if (decision) next[id] = decision;
       else delete next[id];
       return next;
     });
+
+  const prove = (proposals: Proposal[]) => {
+    const built = buildSelection(proposals, decisions, networks, approver, new Date());
+    if (!built.ok) {
+      setProblem(built.reason);
+      return;
+    }
+    setProblem(null);
+    tighten.mutate(built.selection);
+  };
 
   if (!started) {
     return (
@@ -144,8 +161,21 @@ export function Resurrection({ crypt }: { crypt: Crypt }) {
         </p>
       ))}
       <SplitConfig crypt={crypt} candidate={data.config} />
-      <TighteningPanel entries={data.ledger} decisions={decisions} onDecide={decide} />
-      <LiveLedger entries={data.ledger} decisions={decisions} />
+      <TighteningPanel
+        proposals={data.proposals}
+        decisions={decisions}
+        networks={networks}
+        approver={approver}
+        onDecide={decide}
+        onNetworks={(id, text) => setNetworks((current) => ({ ...current, [id]: text }))}
+        onApprover={setApprover}
+        onProve={() => prove(data.proposals)}
+        proving={tighten.isPending}
+        problem={problem}
+        tightened={stored.data ?? null}
+      />
+      {tighten.isError && <ErrorNotice error={tighten.error} what="tightened" />}
+      <LiveLedger entries={data.ledger} decisions={{}} />
     </div>
   );
 }

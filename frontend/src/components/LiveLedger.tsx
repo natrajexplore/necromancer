@@ -19,13 +19,23 @@ export function tally(entries: LedgerEntry[], decisions: Decisions) {
  * The exorcism ledger: every intentional, documented difference from the source. It updates as
  * remediations are accepted or rejected in the tightening panel.
  */
-export function LiveLedger({ entries, decisions }: { entries: LedgerEntry[]; decisions: Decisions }) {
+export function LiveLedger({
+  entries,
+  decisions,
+  title = "Exorcism ledger",
+  idPrefix = "ledger",
+}: {
+  entries: LedgerEntry[];
+  decisions: Decisions;
+  title?: string;
+  idPrefix?: string;
+}) {
   const counts = tally(entries, decisions);
   return (
-    <section aria-labelledby="ledger-title" className="mt-8">
-      <h3 id="ledger-title" className="font-display text-xl text-bone">
+    <section aria-labelledby={`${idPrefix}-title`} className="mt-8">
+      <h3 id={`${idPrefix}-title`} className="font-display text-xl text-bone">
         <Hint explain="Exorcism ledger: the list of every place where the new config intentionally behaves differently from the old one, with the reason.">
-          Exorcism ledger
+          {title}
         </Hint>
       </h3>
       <p className="mt-2 text-bone" aria-live="polite" role="status">

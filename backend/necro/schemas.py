@@ -14,6 +14,7 @@ from necro.findings import Finding
 from necro.gate_models import Sidecar, Verdict
 from necro.ledger import LedgerEntry
 from necro.proof_types import ProofResult
+from necro.tighten import ApprovalDecision, Choice, RemediationKind, Skipped
 
 API_VERSION = "v1"
 MAX_BUDGET = 20_000  # security steering: oracle capped at 20,000 examples per request
@@ -27,6 +28,16 @@ class ConfigRequest(BaseModel):
 
     config: str
     dialect: DialectName | None = None
+
+
+class TighteningSelection(BaseModel):
+    """The remediations a human chose, one ``Choice`` per finding, and their decisions.
+
+    ``approvals`` maps a finding id to a decision on that finding's ledger entries. A rejected
+    one stays in the ledger but its change is left out of the tightened artifact."""
+
+    choices: list[Choice] = Field(default_factory=list, max_length=1000)
+    approvals: dict[str, ApprovalDecision] = Field(default_factory=dict)
 
 
 class ProveRequest(ConfigRequest):
@@ -57,6 +68,20 @@ class GateRequest(ProveRequest):
         if value:
             raise ValueError("haunt is only available for prove, never for gates or the report")
         return value
+
+
+class ResurrectRequest(ConfigRequest):
+    """Resurrect, optionally with a tightening selection (requirement 5.1).
+
+    Without ``tightening`` the answer holds the baseline and the remediation proposals. With it,
+    the answer also holds a separate tightened artifact, proved on its own. ``budget``, ``seed``
+    and ``profile`` size that proof. ``sample`` names a built-in sample whose golden flows run."""
+
+    tightening: TighteningSelection | None = None
+    budget: int | None = Field(default=None, ge=1, le=MAX_BUDGET)
+    seed: int | None = Field(default=None, ge=0, le=2**63 - 1)
+    profile: str | None = None
+    sample: str | None = Field(default=None, max_length=64, pattern=r"^[a-z0-9][a-z0-9.-]*$")
 
 
 class ErrorBody(BaseModel):
@@ -124,7 +149,39 @@ class AutopsyResult(BaseModel):
     by_type: dict[str, int]
 
 
+class Proposal(BaseModel):
+    """One remediation offered for one autopsy finding (requirement 5.1)."""
+
+    finding_id: str
+    finding_type: str
+    severity: str
+    kind: RemediationKind
+    rule_ref: str
+    summary: str
+    needs_networks: bool  # narrow-any: the user must confirm the networks (an object group)
+
+
+class TightenedResult(BaseModel):
+    """The tightened PAN-OS candidate: a separate artifact with its own ledger and proof.
+
+    ``ledger`` holds the tightening entries and the emitter's like-for-like entries for this
+    config. ``proof`` is None when the candidate cannot be compared (see ``proof_error``)."""
+
+    config: str
+    config_lines: int
+    ledger: list[LedgerEntry]
+    applied: list[str]
+    skipped: list[Skipped]
+    notes: list[str]
+    validation_errors: list[str]
+    proof: ProofResult | None
+    proof_error: str = ""
+    passed: bool  # True only when the proof ran and passed
+
+
 class ResurrectResult(BaseModel):
+    """The baseline (like for like) is never changed by a tightening selection."""
+
     api_version: str = API_VERSION
     dialect: str
     config: str
@@ -133,6 +190,8 @@ class ResurrectResult(BaseModel):
     unsupported: list[str]
     notes: list[str]
     blocking: list[LineIssue]
+    proposals: list[Proposal] = Field(default_factory=list)
+    tightened: TightenedResult | None = None
 
 
 class ProveResult(BaseModel):

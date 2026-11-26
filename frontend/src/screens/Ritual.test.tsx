@@ -1,18 +1,20 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { makeQueryClient, type Crypt } from "../api/hooks";
+import { makeQueryClient, tightenedKey, type Crypt } from "../api/hooks";
 import type {
   AutopsyResult,
   Counterexample,
   Finding,
   GrimoireResult,
   LedgerEntry,
+  Proposal,
   ProveResult,
   ResurrectResult,
+  TightenedResult,
 } from "../api/types";
 import { SAMPLES } from "../samples";
 import { exhumeResult, json, mockApi } from "../test/api";
@@ -25,8 +27,8 @@ import { Verdict } from "./Verdict";
 const UPLOAD: Crypt = { id: "upload:1", name: "edge.cfg", config: "hostname synthetic\n" };
 const SAMPLE = SAMPLES[0] as Crypt;
 
-function renderWith(ui: ReactElement) {
-  return render(<QueryClientProvider client={makeQueryClient()}>{ui}</QueryClientProvider>);
+function renderWith(ui: ReactElement, client: QueryClient = makeQueryClient()) {
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
 function finding(overrides: Partial<Finding>): Finding {
@@ -83,15 +85,70 @@ function entry(overrides: Partial<LedgerEntry>): LedgerEntry {
   };
 }
 
+const PROPOSALS: Proposal[] = [
+  {
+    finding_id: "AUT-0001",
+    finding_type: "shadowed",
+    severity: "medium",
+    kind: "remove-rule",
+    rule_ref: "IN#3",
+    summary: "Remove IN#3.",
+    needs_networks: false,
+  },
+  {
+    finding_id: "AUT-0002",
+    finding_type: "overly-broad",
+    severity: "high",
+    kind: "narrow-any",
+    rule_ref: "IN#2",
+    summary: "Narrow the source of IN#2.",
+    needs_networks: true,
+  },
+];
+
+const TIGHTENED_LEDGER: LedgerEntry[] = [
+  entry({
+    id: "TGT-0001",
+    class: "tightening",
+    reason: "Rule IN#3 is shadowed and was removed.",
+    finding_ref: "AUT-0001",
+    old_action: "permit",
+    new_action: "permit",
+    informational: true,
+  }),
+];
+
+const TIGHTENED: TightenedResult = {
+  config: "set rulebase security rules tightened-1 action allow",
+  config_lines: 1,
+  ledger: TIGHTENED_LEDGER,
+  applied: ["AUT-0001"],
+  skipped: [],
+  notes: [],
+  validation_errors: [],
+  proof: {
+    passed: true,
+    seed: 11,
+    budget: 500,
+    golden: { total: 2, passed: 2, failures: [] },
+    contexts: [],
+    counterexample: null,
+  },
+  proof_error: "",
+  passed: true,
+};
+
 const RESURRECT: ResurrectResult = {
   api_version: "v1",
   dialect: "asa",
   config: PANOS,
   config_lines: 2,
-  ledger: [entry({}), entry({ id: "LED-0002", class: "tightening", reason: "Close telnet from outside." })],
+  ledger: [entry({}), entry({ id: "LED-0002", class: "time-range", reason: "A schedule object stands in for the time range." })],
   unsupported: [],
   notes: [],
   blocking: [],
+  proposals: PROPOSALS,
+  tightened: null,
 };
 
 afterEach(() => vi.useRealTimers());
@@ -206,19 +263,132 @@ describe("Resurrection", () => {
     expect(screen.getByText(/does not return a redacted copy/)).toBeInTheDocument();
   });
 
-  it("updates the live ledger when a remediation is accepted or rejected", async () => {
+  it("lists the baseline ledger without accept or reject buttons: only proposals are decided", async () => {
     reducedMotion.matches = true;
     mockApi(routes);
     const user = userEvent.setup();
     renderWith(<Resurrection crypt={SAMPLE} />);
     await user.click(screen.getByRole("button", { name: "Resurrect" }));
-    const status = await screen.findByText(/2 entries: 2 pending, 0 accepted, 0 rejected/);
-    await user.click(screen.getByRole("button", { name: "Accept LED-0002" }));
-    expect(status).toHaveTextContent("1 pending, 1 accepted, 0 rejected");
-    await user.click(screen.getByRole("button", { name: "Reject LED-0002" }));
-    expect(status).toHaveTextContent("1 pending, 0 accepted, 1 rejected");
-    await user.click(screen.getByRole("button", { name: "Reject LED-0002" }));
-    expect(status).toHaveTextContent("2 pending");
+    expect(await screen.findByText(/2 entries: 2 pending, 0 accepted, 0 rejected/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /LED-0002/ })).not.toBeInTheDocument();
+  });
+
+  async function openPanel(handler: (body: Record<string, unknown>) => Response = () => json(RESURRECT)) {
+    reducedMotion.matches = true;
+    const fetchMock = mockApi({ "/v1/resurrect": handler });
+    const user = userEvent.setup();
+    renderWith(<Resurrection crypt={UPLOAD} />);
+    await user.click(screen.getByRole("button", { name: "Resurrect" }));
+    await screen.findByRole("heading", { name: "Zero-trust tightening" });
+    return { user, fetchMock };
+  }
+
+  it("shows one proposal per finding and tracks accept and reject on its own", async () => {
+    const { user } = await openPanel();
+    expect(screen.getByText(/Remove the rule/)).toBeInTheDocument();
+    expect(screen.getByText(/Narrow any to confirmed networks/)).toBeInTheDocument();
+    expect(screen.getByText(/0 accepted, 0 rejected, 2 undecided/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Accept AUT-0001" }));
+    expect(screen.getByRole("button", { name: "Accept AUT-0001" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Reject AUT-0002" }));
+    expect(screen.getByText(/1 accepted, 1 rejected, 0 undecided/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Reject AUT-0002" }));
+    expect(screen.getByText(/1 accepted, 0 rejected, 1 undecided/)).toBeInTheDocument();
+  });
+
+  it("asks for the missing piece before it proves anything", async () => {
+    const { user, fetchMock } = await openPanel();
+    const prove = screen.getByRole("button", { name: "Prove the tightened artifact" });
+    await user.click(prove);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Accept at least one proposal");
+    await user.click(screen.getByRole("button", { name: "Accept AUT-0001" }));
+    await user.click(prove);
+    expect(screen.getByRole("alert")).toHaveTextContent("Name the approver");
+    await user.type(screen.getByLabelText(/Approver/), "A. Reviewer");
+    await user.click(screen.getByRole("button", { name: "Accept AUT-0002" }));
+    await user.click(prove);
+    expect(screen.getByRole("alert")).toHaveTextContent("Confirm the networks for IN#2");
+    expect(fetchMock).toHaveBeenCalledTimes(1); // only the baseline resurrect
+  });
+
+  it("proves the tightened artifact and shows its ledger, leaving the baseline as it was", async () => {
+    const { user, fetchMock } = await openPanel((body) =>
+      json(body.tightening ? { ...RESURRECT, tightened: TIGHTENED } : RESURRECT),
+    );
+    await user.click(screen.getByRole("button", { name: "Accept AUT-0001" }));
+    await user.click(screen.getByRole("button", { name: "Reject AUT-0002" }));
+    await user.type(screen.getByLabelText(/Approver/), "A. Reviewer");
+    await user.click(screen.getByRole("button", { name: "Prove the tightened artifact" }));
+
+    const summary = await screen.findByTestId("tightened-summary");
+    expect(summary).toHaveTextContent("Proof of Life: passed");
+    expect(summary).toHaveTextContent("500 examples per context, seed 11, golden flows 2 of 2");
+    expect(within(summary).getByRole("heading", { name: /Tightened ledger/ })).toBeInTheDocument();
+    expect(summary).toHaveTextContent("TGT-0001");
+    // the baseline pane still holds the baseline config
+    expect(screen.getByText(/ethernet1\/1 layer3 ip/)).toBeInTheDocument();
+    expect(screen.queryByText(/tightened-1 action allow/)).not.toBeInTheDocument();
+
+    const sent = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body)) as {
+      tightening: { choices: unknown[]; approvals: Record<string, { approval: string; approver: string }> };
+      profile: string;
+    };
+    expect(sent.profile).toBe("dev");
+    expect(sent.tightening.choices).toEqual([
+      { finding_id: "AUT-0001", kind: "remove-rule" },
+      { finding_id: "AUT-0002", kind: "narrow-any", networks: [] },
+    ]);
+    expect(sent.tightening.approvals["AUT-0001"]).toMatchObject({ approval: "accepted", approver: "A. Reviewer" });
+    expect(sent.tightening.approvals["AUT-0002"]).toMatchObject({ approval: "rejected" });
+  });
+
+  it("sends confirmed networks for an accepted narrowing", async () => {
+    const { user, fetchMock } = await openPanel((body) =>
+      json(body.tightening ? { ...RESURRECT, tightened: TIGHTENED } : RESURRECT),
+    );
+    await user.click(screen.getByRole("button", { name: "Accept AUT-0002" }));
+    await user.type(screen.getByLabelText(/Confirmed networks for IN#2/), "10.0.0.0/8, 192.0.2.0/24");
+    await user.type(screen.getByLabelText(/Approver/), "A. Reviewer");
+    await user.click(screen.getByRole("button", { name: "Prove the tightened artifact" }));
+    await screen.findByTestId("tightened-summary");
+    const sent = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body)) as {
+      tightening: { choices: { networks: string[] }[] };
+    };
+    expect(sent.tightening.choices[0]?.networks).toEqual(["10.0.0.0/8", "192.0.2.0/24"]);
+  });
+
+  it("shows a failed tightened proof with its counterexample", async () => {
+    const failed: TightenedResult = {
+      ...TIGHTENED,
+      passed: false,
+      proof: { ...(TIGHTENED.proof as NonNullable<TightenedResult["proof"]>), passed: false, counterexample: counterexample() },
+    };
+    const { user } = await openPanel((body) => json(body.tightening ? { ...RESURRECT, tightened: failed } : RESURRECT));
+    await user.click(screen.getByRole("button", { name: "Accept AUT-0001" }));
+    await user.type(screen.getByLabelText(/Approver/), "A. Reviewer");
+    await user.click(screen.getByRole("button", { name: "Prove the tightened artifact" }));
+    const summary = await screen.findByTestId("tightened-summary");
+    expect(summary).toHaveTextContent("Proof of Life: failed");
+    expect(within(summary).getByRole("article")).toHaveTextContent("IN#4");
+  });
+
+  it("reports an engine refusal of the selection", async () => {
+    const { user } = await openPanel((body) =>
+      body.tightening
+        ? json({ code: "invalid-tightening", message: "unknown finding id(s): AUT-0001" }, 422)
+        : json(RESURRECT),
+    );
+    await user.click(screen.getByRole("button", { name: "Accept AUT-0001" }));
+    await user.type(screen.getByLabelText(/Approver/), "A. Reviewer");
+    await user.click(screen.getByRole("button", { name: "Prove the tightened artifact" }));
+    expect(await screen.findByText(/unknown finding id\(s\): AUT-0001/)).toBeInTheDocument();
+    expect(screen.queryByTestId("tightened-summary")).not.toBeInTheDocument();
+  });
+
+  it("says so when there is nothing to tighten", async () => {
+    await openPanel(() => json({ ...RESURRECT, proposals: [] }));
+    expect(screen.getByText("No tightening is proposed for this config.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Prove the tightened artifact" })).not.toBeInTheDocument();
   });
 });
 
@@ -411,7 +581,82 @@ describe("Verdict and Grimoire", () => {
     expect(click).toHaveBeenCalledTimes(2);
     expect(await created[0]?.text()).toBe(MARKDOWN);
     expect(await created[1]?.text()).toBe(PANOS);
-    expect(screen.getByText(/No tightened config is offered/)).toBeInTheDocument();
+    expect(screen.getByText(/No tightened config yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /tightened PAN-OS config/ })).not.toBeInTheDocument();
     expect(screen.getByText(/considered exposed and rotated/)).toBeInTheDocument();
+  });
+
+  async function runGates(client: QueryClient) {
+    mockApi(routes);
+    const created: Blob[] = [];
+    const names: string[] = [];
+    Object.assign(URL, {
+      createObjectURL: (blob: Blob) => (created.push(blob), "blob:test"),
+      revokeObjectURL: () => undefined,
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      names.push(this.download);
+    });
+    const user = userEvent.setup();
+    renderWith(<Verdict crypt={UPLOAD} />, client);
+    await user.click(screen.getByRole("button", { name: "Run the gates" }));
+    await screen.findByRole("heading", { name: "Downloads" });
+    return { user, created, names };
+  }
+
+  it("offers a proved tightened artifact as a separate download, with its ledger", async () => {
+    const client = makeQueryClient();
+    client.setQueryData(tightenedKey(UPLOAD), TIGHTENED);
+    const { user, created, names } = await runGates(client);
+    const section = screen.getByRole("region", { name: "Tightened artifact (separate change)" });
+    expect(section).toHaveTextContent("Its own proof passed (500 examples per context, seed 11)");
+    expect(section).toHaveTextContent("still pending approval");
+
+    await user.click(within(section).getByRole("button", { name: "Download tightened PAN-OS config (.txt)" }));
+    await user.click(within(section).getByRole("button", { name: "Download tightened ledger (.json)" }));
+    expect(names).toEqual(["edge-tightened-panos.txt", "edge-tightened-ledger.json"]);
+    expect(await created[0]?.text()).toBe(TIGHTENED.config);
+    expect(JSON.parse((await created[1]?.text()) ?? "[]")).toEqual(TIGHTENED_LEDGER);
+  });
+
+  it("keeps the baseline download separate from the tightened one", async () => {
+    const client = makeQueryClient();
+    client.setQueryData(tightenedKey(UPLOAD), TIGHTENED);
+    const { user, created, names } = await runGates(client);
+    const baseline = screen.getByRole("button", { name: /baseline PAN-OS config/ });
+    await vi.waitFor(() => expect(baseline).toBeEnabled());
+    await user.click(baseline);
+    expect(names).toEqual(["edge-baseline-panos.txt"]);
+    expect(await created[0]?.text()).toBe(PANOS);
+  });
+
+  it("does not offer a tightened config whose proof did not pass", async () => {
+    const client = makeQueryClient();
+    client.setQueryData(tightenedKey(UPLOAD), { ...TIGHTENED, passed: false });
+    await runGates(client);
+    expect(screen.getByText(/its proof did not pass, so it is not offered/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /tightened PAN-OS config/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /tightened ledger/ })).not.toBeInTheDocument();
+  });
+
+  it("offers the artifact proved on the Resurrection screen of the same crypt", async () => {
+    reducedMotion.matches = true;
+    mockApi({
+      ...routes,
+      "/v1/resurrect": (body) => json(body.tightening ? { ...RESURRECT, tightened: TIGHTENED } : RESURRECT),
+    });
+    const client = makeQueryClient();
+    const user = userEvent.setup();
+    const first = renderWith(<Resurrection crypt={UPLOAD} />, client);
+    await user.click(screen.getByRole("button", { name: "Resurrect" }));
+    await user.click(await screen.findByRole("button", { name: "Accept AUT-0001" }));
+    await user.type(screen.getByLabelText(/Approver/), "A. Reviewer");
+    await user.click(screen.getByRole("button", { name: "Prove the tightened artifact" }));
+    await screen.findByTestId("tightened-summary");
+    first.unmount();
+
+    renderWith(<Verdict crypt={UPLOAD} />, client);
+    await user.click(screen.getByRole("button", { name: "Run the gates" }));
+    expect(await screen.findByRole("button", { name: "Download tightened PAN-OS config (.txt)" })).toBeInTheDocument();
   });
 });

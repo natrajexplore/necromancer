@@ -14,6 +14,7 @@ import type {
   Health,
   ProveRequest,
   ProveResult,
+  ResurrectRequest,
   ResurrectResult,
 } from "./types";
 
@@ -119,7 +120,7 @@ export const api = {
     post<ExhumeResult>("/v1/exhume", body, signal),
   autopsy: (body: ConfigRequest, signal?: AbortSignal) =>
     post<AutopsyResult>("/v1/autopsy", body, signal),
-  resurrect: (body: ConfigRequest, signal?: AbortSignal) =>
+  resurrect: (body: ResurrectRequest, signal?: AbortSignal) =>
     post<ResurrectResult>("/v1/resurrect", body, signal),
   prove: (body: ProveRequest, signal?: AbortSignal) =>
     post<ProveResult>("/v1/prove", body, signal),

@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from necro import service
 from necro.gate_models import Sidecar
+from necro.schemas import TighteningSelection
 from necro.service import NecroError
 from necro.version import __version__, git_commit
 
@@ -30,6 +31,17 @@ def _guarded(call: Callable[[], dict[str, Any]]) -> dict[str, Any]:
         return {"error": exc.body()}
 
 
+def _selection(data: dict[str, Any] | None) -> TighteningSelection | None:
+    if data is None:
+        return None
+    try:
+        return TighteningSelection.model_validate(data)
+    except ValueError as exc:
+        raise NecroError(
+            "invalid-tightening", f"the tightening selection is not valid: {exc}"
+        ) from exc
+
+
 def exhume(config: str, dialect: str | None = None) -> dict[str, Any]:
     """Parse a dead PIX/ASA/IOS config: dialect, interfaces, ACLs, line coverage, unparsed lines."""
     return _guarded(lambda: _dump(service.exhume(config, dialect)))
@@ -40,9 +52,35 @@ def autopsy(config: str, dialect: str | None = None) -> dict[str, Any]:
     return _guarded(lambda: _dump(service.autopsy(config, dialect)))
 
 
-def resurrect(config: str, dialect: str | None = None) -> dict[str, Any]:
-    """Emit the like-for-like PAN-OS candidate config (set commands) with its exorcism ledger."""
-    return _guarded(lambda: _dump(service.resurrect(config, dialect)))
+def resurrect(
+    config: str,
+    dialect: str | None = None,
+    tightening: dict[str, Any] | None = None,
+    budget: int | None = None,
+    seed: int | None = None,
+    profile: str | None = None,
+    sample: str | None = None,
+) -> dict[str, Any]:
+    """Emit the like-for-like PAN-OS candidate (set commands) with its exorcism ledger.
+
+    The answer always lists remediation ``proposals`` (remove shadowed or redundant rules,
+    replace insecure services, narrow any, SNMP v3 notes). Pass ``tightening`` as
+    ``{"choices": [{"finding_id": ..., "networks": [...]}], "approvals": {...}}`` to also get a
+    separate ``tightened`` artifact with its own ledger and proof. The baseline never changes.
+    ``budget``, ``seed``, ``profile`` and ``sample`` apply to that proof."""
+    return _guarded(
+        lambda: _dump(
+            service.resurrect(
+                config,
+                dialect,
+                tightening=_selection(tightening),
+                budget=budget,
+                seed=seed,
+                profile=profile,
+                golden=service.golden_for(sample),
+            )
+        )
+    )
 
 
 def prove(

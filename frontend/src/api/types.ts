@@ -113,15 +113,69 @@ export interface LedgerEntry {
   informational: boolean;
 }
 
+export type RemediationKind = "remove-rule" | "replace-service" | "narrow-any" | "advise";
+
+/** One remediation offered for one autopsy finding. */
+export interface Proposal {
+  finding_id: string;
+  finding_type: string;
+  severity: Severity;
+  kind: RemediationKind;
+  rule_ref: string;
+  summary: string;
+  needs_networks: boolean; // narrow-any: the person must confirm the networks
+}
+
+export interface Choice {
+  finding_id: string;
+  kind?: RemediationKind;
+  networks?: string[]; // narrow-any only: the networks the person confirms
+}
+
+export interface ApprovalDecision {
+  approval: "accepted" | "rejected";
+  approver: string;
+  decided_at: string;
+}
+
+export interface TighteningSelection {
+  choices: Choice[];
+  approvals: Record<string, ApprovalDecision>; // by finding id
+}
+
+export interface ResurrectRequest extends ConfigRequest {
+  tightening?: TighteningSelection;
+  sample?: string;
+  budget?: number;
+  seed?: number;
+  profile?: "dev" | "ci" | "demo";
+}
+
+/** The tightened candidate: a separate artifact with its own ledger and proof (governance R1). */
+export interface TightenedResult {
+  config: string;
+  config_lines: number;
+  ledger: LedgerEntry[];
+  applied: string[];
+  skipped: { finding_id: string; reason: string }[];
+  notes: string[];
+  validation_errors: string[];
+  proof: ProofResult | null;
+  proof_error: string;
+  passed: boolean; // true only when the proof ran and passed
+}
+
 export interface ResurrectResult {
   api_version: string;
   dialect: DialectName;
-  config: string; // the candidate PAN-OS set commands
+  config: string; // the baseline (like for like) candidate PAN-OS set commands
   config_lines: number;
   ledger: LedgerEntry[];
   unsupported: string[];
   notes: string[];
   blocking: LineIssue[];
+  proposals: Proposal[];
+  tightened: TightenedResult | null;
 }
 
 export interface Flow {

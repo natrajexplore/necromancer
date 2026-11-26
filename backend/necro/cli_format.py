@@ -100,34 +100,58 @@ def autopsy_doc(r: AutopsyResult) -> Doc:
 
 
 def resurrect_doc(r: ResurrectResult) -> Doc:
-    return Doc(
-        "Resurrect",
-        [
-            ("dialect", r.dialect),
-            ("candidate config lines", str(r.config_lines)),
-            ("ledger entries", str(len(r.ledger))),
-            ("not expressed", str(len(r.unsupported))),
-            ("blocking source lines", str(len(r.blocking))),
-        ],
-        [
+    facts = [
+        ("dialect", r.dialect),
+        ("candidate config lines", str(r.config_lines)),
+        ("ledger entries", str(len(r.ledger))),
+        ("not expressed", str(len(r.unsupported))),
+        ("blocking source lines", str(len(r.blocking))),
+        ("remediation proposals", str(len(r.proposals))),
+    ]
+    tables = [
+        Table(
+            "Exorcism ledger",
+            ["id", "class", "approval", "context", "reason"],
+            [[e.id, e.entry_class.value, e.approval.value, e.context, e.reason] for e in r.ledger],
+        ),
+        Table("Not expressed", ["item"], [[u] for u in r.unsupported]),
+        Table("Notes", ["note"], [[n] for n in r.notes]),
+        Table(
+            "Blocking source lines",
+            ["line", "reason", "text"],
+            [[str(b.line_no), b.reason, b.text] for b in r.blocking],
+        ),
+        Table(
+            "Remediation proposals",
+            ["finding", "severity", "remediation", "rule", "summary"],
+            [[p.finding_id, p.severity, p.kind.value, p.rule_ref, p.summary] for p in r.proposals],
+        ),
+    ]
+    t = r.tightened
+    if t is not None:
+        proof = "could not run" if t.proof is None else ("passed" if t.passed else "failed")
+        facts += [
+            ("tightened config lines (separate artifact)", str(t.config_lines)),
+            ("tightened changes applied", str(len(t.applied))),
+            ("tightened proof", proof),
+        ]
+        tables += [
             Table(
-                "Exorcism ledger",
+                "Tightened ledger (separate change)",
                 ["id", "class", "approval", "context", "reason"],
                 [
                     [e.id, e.entry_class.value, e.approval.value, e.context, e.reason]
-                    for e in r.ledger
+                    for e in t.ledger
                 ],
             ),
-            Table("Not expressed", ["item"], [[u] for u in r.unsupported]),
-            Table("Notes", ["note"], [[n] for n in r.notes]),
             Table(
-                "Blocking source lines",
-                ["line", "reason", "text"],
-                [[str(b.line_no), b.reason, b.text] for b in r.blocking],
+                "Tightening skipped",
+                ["finding", "reason"],
+                [[s.finding_id, s.reason] for s in t.skipped],
             ),
-        ],
-        code=r.config,
-    )
+            Table("Tightening notes", ["note"], [[n] for n in t.notes]),
+        ]
+    return Doc("Resurrect", facts, tables, code=r.config)
 
 
 def _counterexample_facts(cx: Counterexample) -> list[tuple[str, str]]:

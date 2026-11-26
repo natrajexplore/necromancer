@@ -43,7 +43,10 @@ from necro.schemas import (
     LineIssue,
     ProveResult,
     ResurrectResult,
+    TightenedResult,
+    TighteningSelection,
 )
+from necro.service_tighten import proposals_for, tightened_for
 
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024
 PARSE_TIMEOUT_S = 10.0
@@ -186,9 +189,34 @@ def autopsy(text: str, dialect: str | None = None) -> AutopsyResult:
     )
 
 
-def resurrect(text: str, dialect: str | None = None) -> ResurrectResult:
+def resurrect(
+    text: str,
+    dialect: str | None = None,
+    *,
+    tightening: TighteningSelection | None = None,
+    budget: int | None = None,
+    seed: int | None = None,
+    profile: str | None = None,
+    golden: Sequence[GoldenVector] = (),
+) -> ResurrectResult:
+    """The like-for-like candidate and the remediation proposals (requirement 5.1).
+
+    With a ``tightening`` selection the result also holds a separate tightened artifact with its
+    own ledger and proof (governance R1). The baseline fields are the same either way.
+    ``budget``, ``seed``, ``profile`` and ``golden`` size and seed that proof only.
+    """
+    examples = resolve_budget(budget, profile) if tightening is not None else 0
     policy = load(text, dialect)
     emission = emit_panos(policy)
+    findings = analyze(policy)
+    tightened: TightenedResult | None = None
+    if tightening is not None:
+        try:
+            tightened = tightened_for(
+                policy, findings, tightening, budget=examples, seed=seed, golden=golden
+            )
+        except ValueError as exc:
+            raise NecroError("invalid-tightening", str(exc)) from exc
     return ResurrectResult(
         dialect=policy.dialect.value,
         config=emission.text,
@@ -197,6 +225,8 @@ def resurrect(text: str, dialect: str | None = None) -> ResurrectResult:
         unsupported=emission.unsupported,
         notes=emission.notes,
         blocking=_blocking(policy),
+        proposals=proposals_for(findings),
+        tightened=tightened,
     )
 
 

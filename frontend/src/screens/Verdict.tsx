@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 
-import { useGrimoire, useResurrect, type Crypt } from "../api/hooks";
-import type { GateResult, GrimoireResult, VerdictValue } from "../api/types";
+import { useGrimoire, useResurrect, useTightened, type Crypt } from "../api/hooks";
+import type { GateResult, GrimoireResult, TightenedResult, VerdictValue } from "../api/types";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { RunbookView } from "../components/RunbookView";
 import { download, printHtml, stem } from "../lib/download";
@@ -70,9 +70,21 @@ function GateTable({ gates }: { gates: GateResult[] }) {
   );
 }
 
-function Downloads({ crypt, report, baseline }: { crypt: Crypt; report: GrimoireResult; baseline: string | undefined }) {
+function Downloads({
+  crypt,
+  report,
+  baseline,
+  tightened,
+}: {
+  crypt: Crypt;
+  report: GrimoireResult;
+  baseline: string | undefined;
+  tightened: TightenedResult | null;
+}) {
   const name = stem(crypt.name);
   const button = "rounded-md border border-stone px-4 py-2 hover:border-spectral";
+  // A tightened config is only offered once its own proof passed, and always with its ledger.
+  const provedTightened = tightened !== null && tightened.passed ? tightened : null;
   return (
     <section className="mt-8" aria-labelledby="downloads-title">
       <h3 id="downloads-title" className="text-xl font-semibold">Downloads</h3>
@@ -95,11 +107,46 @@ function Downloads({ crypt, report, baseline }: { crypt: Crypt; report: Grimoire
           Download baseline PAN-OS config (.txt)
         </button>
       </div>
-      <p className="mt-2 text-sm text-ash">
-        No tightened config is offered: the engine does not produce one yet. When it does, it will
-        be a separate file with its own ledger and proof.
-      </p>
-      <p className="mt-2 text-sm text-ash">
+      <section className="mt-6" aria-labelledby="tightened-downloads-title">
+        <h4 id="tightened-downloads-title" className="font-semibold">Tightened artifact (separate change)</h4>
+        {provedTightened ? (
+          <>
+            <p className="mt-1 text-sm text-ash">
+              Its own proof passed
+              {provedTightened.proof ? ` (${provedTightened.proof.budget} examples per context, seed ${provedTightened.proof.seed})` : ""}.
+              It is a separate change from the baseline above and comes with its own ledger.
+              {provedTightened.ledger.some((entry) => entry.approval === "pending")
+                ? " Some ledger entries are still pending approval."
+                : ""}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button
+                type="button"
+                className={button}
+                onClick={() => download(`${name}-tightened-panos.txt`, provedTightened.config, "text/plain")}
+              >
+                Download tightened PAN-OS config (.txt)
+              </button>
+              <button
+                type="button"
+                className={button}
+                onClick={() =>
+                  download(`${name}-tightened-ledger.json`, JSON.stringify(provedTightened.ledger, null, 2), "application/json")
+                }
+              >
+                Download tightened ledger (.json)
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="mt-1 text-sm text-ash">
+            {tightened
+              ? "A tightened config exists, but its proof did not pass, so it is not offered."
+              : "No tightened config yet. Accept proposals on the Resurrection screen and prove the tightened artifact first. It is never mixed into the baseline."}
+          </p>
+        )}
+      </section>
+      <p className="mt-4 text-sm text-ash">
         The shared secrets on the source device should be considered exposed and rotated at
         decommission. Downloads hold the redacted source only.
       </p>
@@ -114,6 +161,7 @@ function Downloads({ crypt, report, baseline }: { crypt: Crypt; report: Grimoire
 export function Verdict({ crypt }: { crypt: Crypt }) {
   const grimoire = useGrimoire(crypt);
   const resurrected = useResurrect(crypt);
+  const tightened = useTightened(crypt);
   const report = grimoire.data;
   const runbook = useMemo(() => (report ? parseRunbook(report.markdown) : []), [report]);
 
@@ -165,7 +213,12 @@ export function Verdict({ crypt }: { crypt: Crypt }) {
               </div>
             </section>
 
-            <Downloads crypt={crypt} report={report} baseline={resurrected.data?.config} />
+            <Downloads
+              crypt={crypt}
+              report={report}
+              baseline={resurrected.data?.config}
+              tightened={tightened.data ?? null}
+            />
 
             <details className="mt-8">
               <summary className="cursor-pointer text-xl font-semibold">Report preview (Markdown)</summary>

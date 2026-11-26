@@ -28,6 +28,7 @@ from necro import cli_format, report, samples, service
 from necro.assessment import Assessment
 from necro.gate_models import Sidecar, load_sidecar
 from necro.golden import GoldenVector, load_golden
+from necro.schemas import TighteningSelection
 from necro.service import MAX_UPLOAD_BYTES, NecroError
 from necro.version import version_string
 
@@ -68,6 +69,19 @@ def _parser() -> argparse.ArgumentParser:
         "(demo; the result is not a migration result)",
     )
     parser.add_argument(
+        "--tightening",
+        type=Path,
+        help="resurrect only: JSON file with the chosen remediations, "
+        '{"choices": [{"finding_id": "F-001", "networks": []}], "approvals": {}}. '
+        "Adds a separate tightened artifact with its own ledger and proof",
+    )
+    parser.add_argument(
+        "--artifact",
+        choices=("baseline", "tightened"),
+        default="baseline",
+        help="resurrect with --format text: which PAN-OS config to print (default baseline)",
+    )
+    parser.add_argument(
         "--sidecar",
         type=Path,
         help="waivers, accepted risks, ledger decisions and change record (JSON or TOML)",
@@ -105,6 +119,15 @@ def _sidecar(path: Path | None) -> Sidecar | None:
         raise NecroError("invalid-sidecar", f"cannot load the sidecar {path}: {exc}") from exc
 
 
+def _selection(path: Path | None) -> TighteningSelection | None:
+    if path is None:
+        return None
+    try:
+        return TighteningSelection.model_validate_json(_read(path))
+    except ValueError as exc:
+        raise NecroError("invalid-tightening", f"cannot load the tightening {path}: {exc}") from exc
+
+
 def _emit(result: BaseModel, doc: cli_format.Doc, fmt: str, *, config_only: str = "") -> None:
     if fmt == "json":
         print(result.model_dump_json(by_alias=True, indent=2))
@@ -137,6 +160,10 @@ def _run(args: argparse.Namespace) -> int:
         raise NecroError("invalid-format", "--format html is only available for grimoire")
     if args.haunt and args.command != "prove":
         raise NecroError("invalid-option", "--haunt is only available for prove")
+    if args.tightening is not None and args.command != "resurrect":
+        raise NecroError("invalid-option", "--tightening is only available for resurrect")
+    if args.artifact == "tightened" and args.tightening is None:
+        raise NecroError("invalid-option", "--artifact tightened needs --tightening")
     if args.command == "exhume":
         exhumed = service.exhume(text, args.dialect)
         _emit(exhumed, cli_format.exhume_doc(exhumed), fmt)
@@ -144,8 +171,19 @@ def _run(args: argparse.Namespace) -> int:
         autopsied = service.autopsy(text, args.dialect)
         _emit(autopsied, cli_format.autopsy_doc(autopsied), fmt)
     elif args.command == "resurrect":
-        raised = service.resurrect(text, args.dialect)
-        _emit(raised, cli_format.resurrect_doc(raised), fmt, config_only=raised.config)
+        raised = service.resurrect(
+            text,
+            args.dialect,
+            tightening=_selection(args.tightening),
+            budget=args.budget,
+            seed=args.seed,
+            profile=args.profile,
+            golden=_golden(args) if args.tightening else [],
+        )
+        shown = raised.config
+        if args.artifact == "tightened" and raised.tightened is not None:
+            shown = raised.tightened.config
+        _emit(raised, cli_format.resurrect_doc(raised), fmt, config_only=shown)
         if fmt == "text" and (raised.ledger or raised.unsupported or raised.blocking):
             print(
                 f"necro: {len(raised.ledger)} ledger entries, {len(raised.unsupported)} not "
@@ -153,6 +191,8 @@ def _run(args: argparse.Namespace) -> int:
                 "use --format md or json for the details",
                 file=sys.stderr,
             )
+        if raised.tightened is not None and not raised.tightened.passed:
+            return EXIT_DIVERGENCE
     elif args.command == "prove":
         proved = service.prove(
             text,

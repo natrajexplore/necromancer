@@ -28,6 +28,7 @@ from necro.schemas import (
     GrimoireResponse,
     ProveRequest,
     ProveResult,
+    ResurrectRequest,
     ResurrectResult,
 )
 from necro.version import __version__, git_commit
@@ -75,14 +76,24 @@ def build_v1() -> APIRouter:
         return result
 
     @router.post("/resurrect")
-    def resurrect(body: ConfigRequest, request: Request) -> ResurrectResult:
-        result = service.resurrect(body.config, body.dialect)
+    def resurrect(body: ResurrectRequest, request: Request) -> ResurrectResult:
+        result = service.resurrect(
+            body.config,
+            body.dialect,
+            tightening=body.tightening,
+            budget=body.budget,
+            seed=body.seed,
+            profile=body.profile,
+            golden=service.golden_for(body.sample),
+        )
         _counts(
             request,
             chars=len(body.config),
             lines=result.config_lines,
             ledger=len(result.ledger),
             blocking=len(result.blocking),
+            proposals=len(result.proposals),
+            tightened=int(result.tightened is not None),
         )
         return result
 

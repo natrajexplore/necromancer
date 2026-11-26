@@ -3,10 +3,10 @@
  * The config text lives only in client memory and is re-sent on every call: the backend is
  * stateless and stores nothing.
  */
-import { QueryClient, queryOptions, useMutation, useQuery } from "@tanstack/react-query";
+import { QueryClient, queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "./client";
-import type { DialectName, ProveRequest } from "./types";
+import type { DialectName, ProveRequest, TightenedResult, TighteningSelection } from "./types";
 
 /** One config in the graveyard: a bundled sample or one the user exhumed. */
 export interface Crypt {
@@ -86,6 +86,37 @@ export function useAutopsy(crypt: Crypt) {
 
 export function useResurrect(crypt: Crypt) {
   return useQuery(resurrectQuery(crypt));
+}
+
+/** Where the tightened artifact of a crypt lives once proved, so the Verdict screen can offer it. */
+export const tightenedKey = (crypt: Crypt) => ["tightened", crypt.id] as const;
+
+/**
+ * Tighten and prove on demand. The baseline answer in the "resurrect" cache is never touched:
+ * the tightened artifact is stored under its own key (governance R1).
+ */
+export function useTighten(crypt: Crypt) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationKey: ["tighten", crypt.id],
+    mutationFn: async (tightening: TighteningSelection) => {
+      const result = await api.resurrect({ ...withSample(crypt), tightening, profile: "dev" });
+      if (!result.tightened) throw new Error("the engine returned no tightened artifact");
+      return result.tightened;
+    },
+    onSuccess: (tightened) => client.setQueryData(tightenedKey(crypt), tightened),
+  });
+}
+
+/** The last proved tightened artifact for this crypt, if any. It never fetches. */
+export function useTightened(crypt: Crypt) {
+  return useQuery<TightenedResult | null>({
+    queryKey: tightenedKey(crypt),
+    queryFn: () => null,
+    enabled: false,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
 }
 
 export function useHealth() {
