@@ -179,3 +179,9 @@
 - What Kiro did: Modelled PIX/ASA to-the-box flows from management commands, auto-loaded golden flows for named samples (pix-2006-hq 16/16), raised banner confidence to 0.95, used host addresses in the runbook; pushed e0fd0f3..f3636fb.
 - What the human corrected: The human specified the semantics and gates; Kiro reported that one inside ICMP ledger entry cannot be removed (single permitted-ip list).
 - Kiro feature used: specs, hooks, steering, PBT
+
+## 2026-11-27 — CLI
+- Spec task(s): necro-engine/7, necro-engine/9
+- What Kiro did: Made the ledger keep only to-the-box flows whose decision changes (equal ones become notes), enabled ping on profiles for the shared sources (pix-2006-hq: one entry left), updated tests and snapshots, ticked task 9; pushed 5adf24d.
+- What the human corrected: The human overrode the Oracle-only scope, asked for BOM-free commit messages; Kiro limited the rule to to-the-box entries and flagged the other equal-decision classes.
+- Kiro feature used: specs, hooks, steering, agent, PBT
