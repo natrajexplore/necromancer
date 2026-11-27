@@ -251,3 +251,9 @@
 - What Kiro did: Closed secret leaks in redact.py (type digits, aaa key, username attributes, isakmp, ftp, ppp, ikev1 psk), added a generic fallback and an API+CLI Hypothesis leak property, pushed 1dc597c.
 - What the human corrected: nothing yet; the human specified each leaking form up front.
 - Kiro feature used: steering, hooks, PBT
+
+## 2026-11-27 — CLI
+- Spec task(s): none (vibe)
+- What Kiro did: Rewrote the README and judge-facing docs from commands run that day, added docs/evidence.md and .github/scripts/check_docs.py, and pushed 068eb90.
+- What the human corrected: The human set the rules: every number from a command, no Crew, IDE, Web or Powers claims, Phase 2 stated honestly, TODO(owner) for unknowns.
+- Kiro feature used: hooks, steering
