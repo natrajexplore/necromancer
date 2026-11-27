@@ -99,6 +99,7 @@ class ApprovalDecision(BaseModel):
     approval: Approval
     approver: str = ""
     decided_at: str = ""
+    reason: str = ""  # why the person decided this way; the UI requires it, files may omit it
 
     @model_validator(mode="after")
     def _named_human(self) -> ApprovalDecision:
@@ -199,10 +200,11 @@ def _plan_replacement(policy: Policy, acl: str, index: int, rule: Rule) -> _Plan
     parts = []
     for p in found:
         name, alt, alt_port = _SECURE_ALTERNATIVES[p]
-        parts.append(f"{name} ({p}/tcp) instead of {alt} ({alt_port}/tcp)")
+        parts.append(f"{alt} ({alt_port}/tcp) replaces {name} ({p}/tcp)")
     reason = (
-        f"Insecure service removed from {rule.id}: {'; '.join(parts)}. The secure alternative "
-        "is not granted, because tightening never adds access. Request it as a separate change."
+        f"Insecure service removed from {rule.id}: {'; '.join(parts)}. Only the removal is "
+        "applied here: the secure alternative is not granted, because tightening never adds "
+        "access. Request it as a separate change."
     )
     new_rule = (
         None
@@ -300,6 +302,7 @@ def _decided(entry: LedgerEntry, decision: ApprovalDecision | None) -> LedgerEnt
             "approval": decision.approval,
             "approver": decision.approver,
             "decided_at": decision.decided_at,
+            "decision_reason": decision.reason,
         }
     )
 

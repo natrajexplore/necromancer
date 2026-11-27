@@ -23,7 +23,8 @@ from necro.emitters import emit_panos
 from necro.gate_models import Sidecar
 from necro.golden import GoldenVector, load_golden, parse_golden
 from necro.haunt import HauntError, haunt_candidate
-from necro.ir import Dialect, ParseError, Policy
+from necro.ir import Dialect, LedgerClass, ParseError, Policy
+from necro.ledger import Approval
 from necro.oracle import (
     DEFAULT_SEED,
     MAX_BUDGET,
@@ -43,6 +44,7 @@ from necro.schemas import (
     LineIssue,
     ProveResult,
     ResurrectResult,
+    TightenedGate,
     TightenedResult,
     TighteningSelection,
 )
@@ -331,6 +333,7 @@ def assess(
     today: date | None = None,
     now: datetime | None = None,
     options: Mapping[str, str] | None = None,
+    tightening: TighteningSelection | None = None,
 ) -> Assessment:
     """Parse, resurrect, prove and judge a config: everything the verdict and report need.
 
@@ -338,6 +341,9 @@ def assess(
     least that many examples per context (governance rule R3), and a lower budget is an explicit
     choice that gate G4 will report. ``today`` (waiver expiry) and ``now`` (header time) default to
     the clock and can be set for tests.
+
+    With a ``tightening`` selection the tightened artifact is built from it and judged as well,
+    as a separate verdict (``Assessment.tightened``). The baseline verdict does not depend on it.
     """
     check_size(text)
     original_sha256 = sha256_text(text)
@@ -348,25 +354,63 @@ def assess(
     run_options = {
         "dialect": f"{dialect} (stated)" if dialect else "detected",
         "golden flows": str(len(golden)),
-        "tightening": "none",
+        "tightening": _tightening_option(tightening),
         **(options or {}),
     }
-    core = compute_core(
-        policy,
-        original_sha256=original_sha256,
-        input_name=input_name,
-        budget=examples,
-        seed=DEFAULT_SEED if seed is None else seed,
-        profile=label,
-        golden=golden,
-        options=run_options,
-    )
+    chosen = tightening or TighteningSelection()
+    try:
+        core = compute_core(
+            policy,
+            original_sha256=original_sha256,
+            input_name=input_name,
+            budget=examples,
+            seed=DEFAULT_SEED if seed is None else seed,
+            profile=label,
+            golden=golden,
+            options=run_options,
+            choices=chosen.choices,
+            approvals=chosen.approvals,
+        )
+    except ValueError as exc:
+        raise NecroError("invalid-tightening", str(exc)) from exc
     return assemble(core, sidecar or Sidecar(), today or stamp.date(), stamp)
+
+
+def _tightening_option(selection: TighteningSelection | None) -> str:
+    if selection is None or not selection.choices:
+        return "none"
+    accepted = sum(1 for d in selection.approvals.values() if d.approval == Approval.accepted)
+    return f"{len(selection.choices)} choices, {accepted} accepted"
+
+
+def _tightened_gate(a: Assessment) -> TightenedGate | None:
+    if a.tightened is None:
+        return None
+    proof = a.tightened.core.proof
+    result = a.tightened.core.artifact.result
+    accepted = len(
+        {
+            e.finding_ref
+            for e in a.tightened.ledger
+            if e.approval == Approval.accepted and e.entry_class == LedgerClass.tightening
+        }
+    )
+    return TightenedGate(
+        verdict=a.tightened.verdict,
+        proof_passed=None if proof is None else proof.passed,
+        golden_total=0 if proof is None else proof.golden.total,
+        golden_passed=0 if proof is None else proof.golden.passed,
+        applied=result.applied,
+        accepted=accepted,
+        ledger=a.tightened.ledger,
+    )
 
 
 def _gate_fields(a: Assessment) -> dict[str, object]:
     proof = a.core.proof
     return {
+        "ledger": a.ledger,
+        "tightened": _tightened_gate(a),
         "dialect": a.core.policy.dialect.value,
         "verdict": a.verdict,
         "coverage": _coverage_summary(a.core.coverage),
@@ -406,6 +450,7 @@ def gate(
     profile: str | None = None,
     golden: Sequence[GoldenVector] = (),
     input_name: str = DEFAULT_INPUT_NAME,
+    tightening: TighteningSelection | None = None,
 ) -> GateResponse:
     """Gates G1 to G6 and the readiness verdict (see ``assess``)."""
     return gate_response(
@@ -418,6 +463,7 @@ def gate(
             profile=profile,
             golden=golden,
             input_name=input_name,
+            tightening=tightening,
         )
     )
 
@@ -432,6 +478,7 @@ def grimoire(
     profile: str | None = None,
     golden: Sequence[GoldenVector] = (),
     input_name: str = DEFAULT_INPUT_NAME,
+    tightening: TighteningSelection | None = None,
 ) -> GrimoireResponse:
     """The verdict and the Grimoire report (see ``assess``)."""
     return grimoire_response(
@@ -444,5 +491,6 @@ def grimoire(
             profile=profile,
             golden=golden,
             input_name=input_name,
+            tightening=tightening,
         )
     )

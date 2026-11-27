@@ -203,8 +203,10 @@ def prove_doc(r: ProveResult) -> Doc:
 def gate_doc(r: GateResponse) -> Doc:
     """The verdict first, then the gates, the blocking reasons and the conditions."""
     v = r.verdict
+    t = r.tightened
     facts = [
-        ("verdict", v.value),
+        ("verdict (baseline)", v.value) if t else ("verdict", v.value),
+        *([("verdict (tightened, separate change)", t.verdict.value)] if t else []),
         ("dialect", r.dialect),
         ("coverage", f"{r.coverage.ratio * 100:.1f}% of {r.coverage.security_relevant} lines"),
         ("proof", "not run" if r.proof_passed is None else ("pass" if r.proof_passed else "FAIL")),
@@ -224,8 +226,25 @@ def gate_doc(r: GateResponse) -> Doc:
             Table("Blocking reasons", ["reason"], [[b] for b in v.blocking_reasons]),
             Table("Conditions", ["condition"], [[c] for c in v.conditions]),
             Table("Notes", ["note"], [[n] for n in v.notes]),
+            *_tightened_tables(r),
         ],
     )
+
+
+def _tightened_tables(r: GateResponse) -> list[Table]:
+    """The gates and blocking reasons of the tightened artifact, apart from the baseline's."""
+    if r.tightened is None:
+        return []
+    v = r.tightened.verdict
+    return [
+        Table(
+            "Tightened gates (separate change)",
+            ["gate", "status", "blocking reasons"],
+            [[g.gate, g.status, str(len(g.blocking_reasons))] for g in v.gates],
+        ),
+        Table("Tightened blocking reasons", ["reason"], [[b] for b in v.blocking_reasons]),
+        Table("Tightened conditions", ["condition"], [[c] for c in v.conditions]),
+    ]
 
 
 def render_text(doc: Doc) -> str:

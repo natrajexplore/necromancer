@@ -131,13 +131,16 @@ def gate(
     sidecar: dict[str, Any] | None = None,
     golden: str | None = None,
     sample: str | None = None,
+    tightening: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Readiness gates G1-G6 and the GO / CONDITIONAL / NO-GO verdict with blocking reasons.
 
     Defaults to the ci budget (5,000 examples per context), which a GO verdict needs. ``sidecar``
     holds waivers, accepted_risks, ledger_decisions, change and runbook overrides. ``golden`` is
     golden-flow TOML text. ``sample`` names a built-in sample whose golden flows run when
-    ``golden`` is empty."""
+    ``golden`` is empty. ``tightening`` is the same selection as for resurrect: it adds a separate
+    ``tightened`` verdict (own proof and ledger, G6 on the tightened policy). The baseline
+    ``verdict`` does not change."""
     return _guarded(
         lambda: _dump(
             service.gate(
@@ -148,6 +151,7 @@ def gate(
                 seed=seed,
                 profile=profile,
                 golden=service.golden_for(sample, golden),
+                tightening=_selection(tightening),
             )
         )
     )

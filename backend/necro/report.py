@@ -30,7 +30,9 @@ TITLE = "Grimoire: migration evidence report"
 
 
 def title_of(a: Assessment) -> str:
-    return f"{TITLE}: {a.core.input_name}"
+    """The title names the input and which artifacts the verdicts below belong to."""
+    judged = "baseline and tightened artifacts" if a.tightened else "baseline artifact"
+    return f"{TITLE}: {a.core.input_name} ({judged})"
 
 
 def runbook_section(a: Assessment) -> Section:

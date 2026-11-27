@@ -1,8 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
-import { useGrimoire, useResurrect, useTightened, type Crypt } from "../api/hooks";
-import type { GateResult, GrimoireResult, TightenedResult, VerdictValue } from "../api/types";
+import { useGrimoire, useResurrect, useTightened, useTighteningSelection, type Crypt } from "../api/hooks";
+import type {
+  GateResult,
+  GrimoireResult,
+  LedgerDecision,
+  TightenedResult,
+  Verdict as VerdictResult,
+  VerdictValue,
+} from "../api/types";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { LedgerDecisions } from "../components/LedgerDecisions";
 import { RunbookView } from "../components/RunbookView";
 import { download, printHtml, stem } from "../lib/download";
 import { parseRunbook } from "../lib/runbook";
@@ -154,6 +162,85 @@ function Downloads({
   );
 }
 
+type Artifact = "baseline" | "tightened";
+
+const ARTIFACT_LABEL: Record<Artifact, string> = {
+  baseline: "baseline artifact (like for like)",
+  tightened: "tightened artifact (separate change)",
+};
+
+/** What the verdict section shows: the verdict of one artifact with the proof facts it rests on. */
+interface View {
+  artifact: Artifact;
+  verdict: VerdictResult;
+  proofPassed: boolean | null;
+  goldenPassed: number;
+  goldenTotal: number;
+}
+
+function viewOf(report: GrimoireResult, artifact: Artifact): View | null {
+  if (artifact === "baseline") {
+    return {
+      artifact,
+      verdict: report.verdict,
+      proofPassed: report.proof_passed,
+      goldenPassed: report.golden_passed,
+      goldenTotal: report.golden_total,
+    };
+  }
+  const gate = report.tightened;
+  if (!gate) return null;
+  return {
+    artifact,
+    verdict: gate.verdict,
+    proofPassed: gate.proof_passed,
+    goldenPassed: gate.golden_passed,
+    goldenTotal: gate.golden_total,
+  };
+}
+
+/** Which artifact the gates judge. The tightened one is selectable only once its proof passed. */
+function JudgeSwitch({
+  judge,
+  onJudge,
+  accepted,
+  available,
+}: {
+  judge: Artifact;
+  onJudge: (artifact: Artifact) => void;
+  accepted: number;
+  available: boolean;
+}) {
+  const button = "rounded-md border px-3 py-1.5 aria-pressed:bg-spectral aria-pressed:text-void disabled:opacity-50";
+  return (
+    <div role="group" aria-label="Judge" className="mt-4 flex flex-wrap items-center gap-3">
+      <span className="text-ash">Judge:</span>
+      <button
+        type="button"
+        aria-pressed={judge === "baseline"}
+        onClick={() => onJudge("baseline")}
+        className={`${button} border-stone`}
+      >
+        baseline
+      </button>
+      <button
+        type="button"
+        aria-pressed={judge === "tightened"}
+        disabled={!available}
+        onClick={() => onJudge("tightened")}
+        className={`${button} border-stone`}
+      >
+        tightened ({accepted} accepted)
+      </button>
+      {!available && (
+        <span className="text-sm text-ash">
+          Prove a tightened artifact on the Resurrection screen to judge it here.
+        </span>
+      )}
+    </div>
+  );
+}
+
 /**
  * Verdict and Grimoire. Plain on purpose: no theme labels, verdict and gate table first. This
  * is evidence for a reviewer to weigh, not an approval to deploy.
@@ -162,8 +249,29 @@ export function Verdict({ crypt }: { crypt: Crypt }) {
   const grimoire = useGrimoire(crypt);
   const resurrected = useResurrect(crypt);
   const tightened = useTightened(crypt);
+  const selection = useTighteningSelection(crypt);
+  const [judge, setJudge] = useState<Artifact>("baseline");
+  const [decisions, setDecisions] = useState<Record<string, LedgerDecision>>({});
+  const [approver, setApprover] = useState("");
   const report = grimoire.data;
   const runbook = useMemo(() => (report ? parseRunbook(report.markdown) : []), [report]);
+  // a tightened artifact counts only after its own proof passed
+  const proved = tightened.data?.passed ? tightened.data : null;
+  const accepted = selection.data
+    ? Object.values(selection.data.approvals).filter((d) => d.approval === "accepted").length
+    : (proved?.applied.length ?? 0);
+  const artifact: Artifact = judge === "tightened" && proved ? "tightened" : "baseline";
+  const view = report ? viewOf(report, artifact) : null;
+  const entries = artifact === "tightened" && proved ? proved.ledger : (resurrected.data?.ledger ?? []);
+  const decide = (id: string, decision: LedgerDecision | null) =>
+    setDecisions((current) => {
+      const next = { ...current };
+      if (decision) next[id] = decision;
+      else delete next[id];
+      return next;
+    });
+  const run = () =>
+    grimoire.mutate({ tightening: proved ? (selection.data ?? null) : null, decisions });
 
   return (
     <div className="font-sans">
@@ -171,9 +279,18 @@ export function Verdict({ crypt }: { crypt: Crypt }) {
         The readiness verdict comes from gates G1 to G6. It supports evidence for a decision by
         the change approver. It does not say the config is safe to deploy.
       </p>
+      <JudgeSwitch judge={artifact} onJudge={setJudge} accepted={accepted} available={proved !== null} />
+      <LedgerDecisions
+        artifact={artifact}
+        entries={entries}
+        decisions={decisions}
+        approver={approver}
+        onApprover={setApprover}
+        onDecide={decide}
+      />
       <button
         type="button"
-        onClick={() => grimoire.mutate()}
+        onClick={run}
         disabled={grimoire.isPending}
         className="mt-4 rounded-md bg-spectral px-5 py-2.5 font-semibold text-void disabled:opacity-60"
       >
@@ -186,23 +303,36 @@ export function Verdict({ crypt }: { crypt: Crypt }) {
       )}
       <div aria-live="polite">
         {grimoire.isError && <ErrorNotice error={grimoire.error} what="assessed" />}
-        {report && (
+        {report && view === null && (
+          <p role="status" className="mt-6 text-candle">
+            These results do not cover the tightened artifact. Run the gates again to judge it.
+          </p>
+        )}
+        {report && view !== null && (
           <>
             <section className="mt-6" aria-labelledby="verdict-title">
               <h3 id="verdict-title" className="text-xl font-semibold">Readiness verdict</h3>
-              <p className={`mt-2 inline-block rounded-md border-2 px-4 py-2 text-3xl font-bold ${VERDICT_STYLE[report.verdict.value]}`}>
-                {report.verdict.value}
+              <p className={`mt-2 inline-block rounded-md border-2 px-4 py-2 ${VERDICT_STYLE[view.verdict.value]}`}>
+                <span className="text-3xl font-bold">{view.verdict.value}</span>{" "}
+                <span className="text-sm" data-testid="verdict-artifact">
+                  for the {ARTIFACT_LABEL[view.artifact]}
+                </span>
               </p>
-              <p className="mt-2">{VERDICT_TEXT[report.verdict.value]}</p>
-              <List title="Blocking reasons" items={report.verdict.blocking_reasons} />
-              <List title="Conditions" items={report.verdict.conditions} />
-              <List title="Notes" items={report.verdict.notes} />
+              <p className="mt-2">{VERDICT_TEXT[view.verdict.value]}</p>
+              {report.tightened && (
+                <p className="mt-1 text-sm text-ash">
+                  Baseline: {report.verdict.value}. Tightened (separate change): {report.tightened.verdict.value}.
+                </p>
+              )}
+              <List title="Blocking reasons" items={view.verdict.blocking_reasons} />
+              <List title="Conditions" items={view.verdict.conditions} />
+              <List title="Notes" items={view.verdict.notes} />
               <h3 className="mt-6 text-xl font-semibold">Gates</h3>
-              <GateTable gates={report.verdict.gates} />
+              <GateTable gates={view.verdict.gates} />
               <p className="mt-3 text-sm text-ash">
-                Proof: {report.proof_passed === null ? "could not run" : report.proof_passed ? "passed" : "failed"},{" "}
+                Proof: {view.proofPassed === null ? "could not run" : view.proofPassed ? "passed" : "failed"},{" "}
                 {report.examples_per_context.toLocaleString("en-US")} examples per context, seed {report.seed}.
-                Golden flows: {report.golden_passed} of {report.golden_total} passed.
+                Golden flows: {view.goldenPassed} of {view.goldenTotal} passed.
               </p>
             </section>
 

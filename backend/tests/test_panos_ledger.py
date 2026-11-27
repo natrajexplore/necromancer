@@ -65,6 +65,7 @@ def test_entries_are_numbered_in_order_and_serialize_with_the_spec_field_names()
         "old_action",
         "new_action",
         "finding_ref",
+        "decision_reason",
         "approval",
         "approver",
         "decided_at",

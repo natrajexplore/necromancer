@@ -6,7 +6,14 @@
 import { QueryClient, queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "./client";
-import type { DialectName, ProveRequest, TightenedResult, TighteningSelection } from "./types";
+import type {
+  DialectName,
+  GrimoireRequest,
+  LedgerDecision,
+  ProveRequest,
+  TightenedResult,
+  TighteningSelection,
+} from "./types";
 
 /** One config in the graveyard: a bundled sample or one the user exhumed. */
 export interface Crypt {
@@ -91,6 +98,9 @@ export function useResurrect(crypt: Crypt) {
 /** Where the tightened artifact of a crypt lives once proved, so the Verdict screen can offer it. */
 export const tightenedKey = (crypt: Crypt) => ["tightened", crypt.id] as const;
 
+/** The selection the stored tightened artifact was built from, so the gates can rebuild it. */
+export const selectionKey = (crypt: Crypt) => ["tightening-selection", crypt.id] as const;
+
 /**
  * Tighten and prove on demand. The baseline answer in the "resurrect" cache is never touched:
  * the tightened artifact is stored under its own key (governance R1).
@@ -104,7 +114,21 @@ export function useTighten(crypt: Crypt) {
       if (!result.tightened) throw new Error("the engine returned no tightened artifact");
       return result.tightened;
     },
-    onSuccess: (tightened) => client.setQueryData(tightenedKey(crypt), tightened),
+    onSuccess: (tightened, selection) => {
+      client.setQueryData(tightenedKey(crypt), tightened);
+      client.setQueryData(selectionKey(crypt), selection);
+    },
+  });
+}
+
+/** The selection behind the last tightened artifact for this crypt, if any. It never fetches. */
+export function useTighteningSelection(crypt: Crypt) {
+  return useQuery<TighteningSelection | null>({
+    queryKey: selectionKey(crypt),
+    queryFn: () => null,
+    enabled: false,
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 }
 
@@ -132,10 +156,31 @@ export function useProve(crypt: Crypt) {
   });
 }
 
-/** The Grimoire (report + verdict) also runs on demand. */
+/** What a gate run sends besides the config: the tightening to judge and the ledger decisions. */
+export interface GateOptions {
+  tightening?: TighteningSelection | null;
+  decisions?: Record<string, LedgerDecision>;
+}
+
+/** The report names the input, never a placeholder. The API caps the label at 120 characters. */
+function inputName(crypt: Crypt): string {
+  return crypt.name.slice(0, 120);
+}
+
+/**
+ * The Grimoire (report + verdict) also runs on demand. The decisions travel as the sidecar of this
+ * one request: the engine uses them for the answer and stores nothing.
+ */
 export function useGrimoire(crypt: Crypt) {
   return useMutation({
     mutationKey: ["grimoire", crypt.id],
-    mutationFn: () => api.grimoire(withSample(crypt)),
+    mutationFn: (options: GateOptions = {}) => {
+      const body: GrimoireRequest = { ...withSample(crypt), name: inputName(crypt) };
+      if (options.tightening) body.tightening = options.tightening;
+      if (options.decisions && Object.keys(options.decisions).length > 0) {
+        body.sidecar = { ledger_decisions: options.decisions };
+      }
+      return api.grimoire(body);
+    },
   });
 }

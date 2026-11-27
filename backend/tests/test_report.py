@@ -150,7 +150,9 @@ def test_markdown_and_html_carry_the_same_tables_and_blocks(name: str) -> None:
 
 def test_the_title_names_the_input() -> None:
     markdown = report.render_md(assessment_of("pix-2006-hq"))
-    assert markdown.startswith("# Grimoire: migration evidence report: pix-2006-hq.cfg\n")
+    assert markdown.startswith(
+        "# Grimoire: migration evidence report: pix-2006-hq.cfg (baseline artifact)\n"
+    )
 
 
 # -- first page: verdict, blocking reasons, waivers, change record -----------------------------
@@ -159,7 +161,7 @@ def test_the_title_names_the_input() -> None:
 def test_the_first_page_has_the_verdict_gates_blocking_reasons_and_rotation_advice() -> None:
     a = assessment_of("pix-2006-hq")
     page = first_page(report.render_md(a))
-    assert f"Readiness verdict: {a.verdict.value}." in page
+    assert f"Readiness verdict, baseline artifact (like for like): {a.verdict.value}." in page
     for gate in a.verdict.gates:
         assert re.search(rf"^\| {gate.gate} \| [^|]+ \| {gate.status} \|", page, flags=re.MULTILINE)
     assert a.verdict.blocking_reasons
@@ -575,7 +577,10 @@ def test_a_go_report_says_go_with_no_blocking_reasons() -> None:
     a = go_assessment()
     assert a.verdict.value == "GO", a.verdict.blocking_reasons
     page = first_page(report.render_md(a))
-    assert "Readiness verdict: GO." in page and "### Blocking reasons\n\nNone." in page
+    assert (
+        "Readiness verdict, baseline artifact (like for like): GO." in page
+        and "### Blocking reasons\n\nNone." in page
+    )
     assert "No waivers are in use." in page
 
 
@@ -583,4 +588,7 @@ def test_a_four_eyes_violation_is_conditional_and_on_the_first_page() -> None:
     a = go_assessment(peer_reviewer="alex  engineer")
     assert a.verdict.value == "CONDITIONAL"
     page = first_page(report.render_md(a))
-    assert "Readiness verdict: CONDITIONAL." in page and "four-eyes" in page
+    assert (
+        "Readiness verdict, baseline artifact (like for like): CONDITIONAL." in page
+        and "four-eyes" in page
+    )

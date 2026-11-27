@@ -52,7 +52,8 @@ def _assess(body: GateRequest) -> Assessment:
         seed=body.seed,
         profile=body.profile,
         golden=service.golden_for(body.sample, body.golden),
-        input_name=body.name or DEFAULT_INPUT_NAME,
+        input_name=body.name or body.sample or DEFAULT_INPUT_NAME,
+        tightening=body.tightening,
     )
 
 

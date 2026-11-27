@@ -10,6 +10,7 @@ import type {
   ConfigRequest,
   ErrorBody,
   ExhumeResult,
+  GrimoireRequest,
   GrimoireResult,
   Health,
   ProveRequest,
@@ -124,6 +125,6 @@ export const api = {
     post<ResurrectResult>("/v1/resurrect", body, signal),
   prove: (body: ProveRequest, signal?: AbortSignal) =>
     post<ProveResult>("/v1/prove", body, signal),
-  grimoire: (body: ProveRequest, signal?: AbortSignal) =>
+  grimoire: (body: GrimoireRequest, signal?: AbortSignal) =>
     post<GrimoireResult>("/v1/grimoire", body, signal),
 };

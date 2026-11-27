@@ -223,3 +223,9 @@
 - What Kiro did: Added the EnableCdn fallback: conditional CloudFront resources in template.yaml, API-served UI with SPA fallback and security headers (api/static.py), deploy.ps1 -NoCdn, DEPLOY.md section, tests; sam validate --lint and the full suite pass.
 - What the human corrected: The human asked for the fallback because CloudFront is blocked until AWS verifies the account.
 - Kiro feature used: steering, hooks
+
+## 2026-11-28 — CLI
+- Spec task(s): necro-engine/7.1, migration-governance/11
+- What Kiro did: Added requirements 5.5, 5.6 and governance 1.8, 2.5, 4.8, 6.3, 6.4 first, then made gate, grimoire, necro gate --tightening and the MCP gate tool take the tightening selection. service.assess builds core.tightened from it. The tightened verdict is separate: G6 re-runs autopsy on the tightened IR (baseline finding ids kept, new ones get -T), G4 uses the tightened artifact's own proof and golden flows, the baseline verdict is unchanged, haunt is still refused. Ledger decisions carry a reason. The Verdict screen got pending-entry decisions (approver, reason), a baseline | tightened switch and an artifact label on the badge. The report title names the input and the artifacts. TGT reason now says "ssh (22/tcp) replaces telnet (23/tcp)". Tests: pix-2006-hq baseline NO-GO, tightened GO with AUT-0008 and LED-0001 accepted.
+- What the human corrected: The human asked for the spec change first and for G6 to count a finding as cleared only when the emitted tightened artifact no longer has it.
+- Kiro feature used: specs, steering, hooks

@@ -19,4 +19,6 @@
 - [x] 9. Wire into API (`/v1/gate`, `/v1/grimoire`), CLI (`necro gate`, exit codes) and the MCP `gate` tool
   - _Requirements: 6.1, 6.2_
 - [ ] 10. **[P2]** PDF export of the report; CSV export of findings and ledger
+- [x] 11. Gate the tightened artifact: gate, grimoire, CLI and MCP take a tightening selection; separate tightened verdict; Grimoire shows both; Verdict screen lists pending ledger entries with approver and reason and has the baseline | tightened switch
+  - _Requirements: 1.8, 2.5, 4.8, 6.3, 6.4_
   - _Requirements: 4.7_

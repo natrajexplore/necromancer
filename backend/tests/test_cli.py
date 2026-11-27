@@ -243,7 +243,7 @@ def test_grimoire_prints_the_report_and_exits_zero_even_for_no_go(
 ) -> None:
     code, out, _ = run(capsys, "grimoire", PIX, *FAST)
     assert code == 0 and out.startswith("# Grimoire: migration evidence report: pix-2006-hq.cfg")
-    assert "Readiness verdict: NO-GO." in out
+    assert "Readiness verdict, baseline artifact (like for like): NO-GO." in out
     assert re.findall(r"^## (\d+)\. ", out, flags=re.MULTILINE) == [str(n) for n in range(1, 11)]
     code, html_out, _ = run(capsys, "grimoire", PIX, *FAST, "--format", "html")
     assert (

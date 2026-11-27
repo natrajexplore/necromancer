@@ -19,6 +19,7 @@ Phase markers **[P1]** / **[P2]** have the same meaning as in the necro-engine s
 1.5 **[P1]** G4 SHALL fail WHEN the proof ran below the `ci` budget for any context, when any divergence lies outside the ledger, or when any golden flow fails. It SHALL list active rules not hit on either side as warnings.
 1.6 **[P1]** G5 SHALL fail WHEN any ledger entry is `pending`.
 1.7 **[P1]** G6 SHALL fail WHEN any critical finding is open without an accepted-risk record.
+1.8 **[P1]** WHEN a tightening selection is given THE SYSTEM SHALL evaluate G1 to G6 for the tightened artifact as well, with its own ledger, proof and findings (see necro-engine 5.5). The baseline verdict SHALL be the same with or without a selection, and a haunted candidate SHALL still be refused for both.
 
 ## Requirement 2: Readiness verdict, waivers and approvals
 **User story:** As a CAB member, I want a single verdict with the reasons on top, so I can decide quickly and defensibly.
@@ -27,6 +28,7 @@ Phase markers **[P1]** / **[P2]** have the same meaning as in the necro-engine s
 2.2 **[P1]** A waiver SHALL record `{target (line/finding/ledger id), reason, approver, expires_on}`. An expired waiver SHALL count as missing.
 2.3 **[P1]** THE SYSTEM SHALL accept change metadata `{change_id, requested_by, peer_reviewer, cab_reference, window_start, window_end}` and SHALL show `CONDITIONAL` instead of `GO` WHEN the peer reviewer equals the requester (four-eyes rule).
 2.4 **[P1]** The verdict SHALL never use the words "compliant" or "safe to deploy" (asserted by a test).
+2.5 **[P1]** THE SYSTEM SHALL report the two verdicts separately, name the artifact each belongs to, and mark the tightened one as a separate change (governance P10).
 
 ## Requirement 3: Audit trail and determinism
 3.1 **[P1]** Every report and API result SHALL carry an audit header: tool version + git commit, SHA-256 of every input, dialect + OS version, options, seed, budget, profile, UTC timestamp, and SHA-256 of every output artifact.
@@ -43,6 +45,7 @@ Phase markers **[P1]** / **[P2]** have the same meaning as in the necro-engine s
 4.5 **[P1]** THE SYSTEM SHALL include the control-mapping table from the governance steering with the "supports evidence for" wording.
 4.6 **[P1]** THE SYSTEM SHALL recommend rotating every redacted shared secret (counted by type, never shown).
 4.7 **[P2]** THE SYSTEM SHALL export the report as PDF and the findings/ledger as CSV.
+4.8 **[P1]** WHEN a tightened artifact was judged, THE SYSTEM SHALL show both verdicts in the Grimoire, with the tightened one marked as a separate change, and SHALL name the artifacts in the report title. The title SHALL show the name of the input, not a placeholder.
 
 ## Requirement 5: Runbook
 **User story:** As the implementing engineer, I want ready-made checklists and command lists for the change window.
@@ -56,3 +59,5 @@ Phase markers **[P1]** / **[P2]** have the same meaning as in the necro-engine s
 ## Requirement 6: Interfaces
 6.1 **[P1]** THE SYSTEM SHALL expose `POST /v1/gate` (gates + verdict) and include the verdict in `POST /v1/grimoire`, the CLI (`necro gate`, exit code 0 = GO/CONDITIONAL, 1 = NO-GO) and the MCP tool `gate`.
 6.2 **[P1]** Waivers, approvals and change metadata SHALL be supplied as a JSON/TOML sidecar file (CLI) or request body (API). The hosted demo SHALL NOT store them.
+6.3 **[P1]** `POST /v1/gate`, `POST /v1/grimoire`, `necro gate --tightening FILE` and the MCP tool `gate` SHALL accept the same tightening selection as resurrect.
+6.4 **[P1]** The Verdict screen SHALL list every pending ledger entry of the artifact being judged, each with accept or reject, a required approver name and a required reason, and send them as `sidecar.ledger_decisions` without storing them. It SHALL offer a switch between judging the baseline and the tightened artifact that is enabled only once a proved tightened artifact exists, and SHALL show which artifact a verdict belongs to.

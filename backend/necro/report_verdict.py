@@ -187,7 +187,7 @@ def verdict_section(a: Assessment) -> Section:
         (w.target, w.approver, w.expires_on.isoformat(), w.reason) for w in verdict.waivers_used
     )
     blocks: list[Block] = [
-        Para(f"Readiness verdict: {verdict.value}."),
+        Para(f"Readiness verdict, baseline artifact (like for like): {verdict.value}."),
         Para(
             "This verdict says what the evidence supports. It does not approve the change and it "
             "is not a statement about the change itself. A named human decides."
@@ -211,10 +211,15 @@ def verdict_section(a: Assessment) -> Section:
         blocks += [
             Heading("Tightened candidate (separate change)"),
             Para(
-                f"Verdict for the tightened candidate: {tightened.value}. It has its own ledger "
-                "and proof, and it is never delivered without that ledger."
+                f"Readiness verdict, tightened artifact (a separate change): {tightened.value}. "
+                "It has its own ledger, proof and findings, and it is never delivered without "
+                "that ledger. The baseline verdict above does not depend on it."
             ),
+            Table(("Gate", "Name", "Status", "Detail"), _gate_rows(tightened)),
+            Heading("Tightened blocking reasons"),
             _bullets_or_none(tightened.blocking_reasons),
+            Heading("Tightened conditions"),
+            _bullets_or_none([*tightened.conditions, *tightened.notes]),
         ]
     blocks += [
         Heading("Change record"),

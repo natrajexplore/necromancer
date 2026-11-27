@@ -68,6 +68,8 @@
 - [x] 7. Tightening + exorcism ledger
   - Remediations from findings, ledger entries with approval state, separate baseline/tightened artifacts; PBT P6
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
+- [x] 7.1 Gate the tightened artifact: `assess` builds it from the selection, G6 re-runs autopsy on the tightened IR, G4 uses its own proof, ledger decisions carry a reason; reword TGT-0002
+  - _Requirements: 5.5, 5.6_
 
 - [x] 8. Proof of Life oracle
 - [x] 8.1 Boundary-biased flow strategy (incl. NAT and device addresses, all named ICMP types) with `hypothesis.target()`

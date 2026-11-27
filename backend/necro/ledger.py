@@ -45,6 +45,7 @@ class LedgerEntry(BaseModel):
     approval: Approval = Approval.pending
     approver: str = ""
     decided_at: str = ""
+    decision_reason: str = ""  # the approver's reason for the decision
     informational: bool = False
     regions: list[Box] = Field(default_factory=list, exclude=True)
 

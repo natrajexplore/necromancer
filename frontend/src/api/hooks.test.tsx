@@ -70,7 +70,7 @@ describe("React Query bindings", () => {
     const prove = renderHook(() => useProve({ ...CRYPT, dialect: "asa" }), { wrapper: Wrapper });
     await prove.result.current.mutateAsync({});
     const grimoire = renderHook(() => useGrimoire({ ...CRYPT, dialect: "asa" }), { wrapper: Wrapper });
-    await grimoire.result.current.mutateAsync();
+    await grimoire.result.current.mutateAsync({});
     for (const call of fetchMock.mock.calls) {
       expect(JSON.parse(String(call[1]?.body))).toMatchObject({ sample: "asa-9.8-dc", dialect: "asa" });
     }
@@ -91,6 +91,6 @@ describe("React Query bindings", () => {
     mockApi({ "/v1/grimoire": () => json({ code: "not-implemented", message: "not implemented yet" }, 501) });
     const { Wrapper } = wrapper();
     const { result } = renderHook(() => useGrimoire(CRYPT), { wrapper: Wrapper });
-    await expect(result.current.mutateAsync()).rejects.toMatchObject({ status: 501, code: "not-implemented" });
+    await expect(result.current.mutateAsync({})).rejects.toMatchObject({ status: 501, code: "not-implemented" });
   });
 });

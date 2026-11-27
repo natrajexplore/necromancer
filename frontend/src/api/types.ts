@@ -110,6 +110,7 @@ export interface LedgerEntry {
   approval: "pending" | "accepted" | "rejected";
   approver: string;
   decided_at: string;
+  decision_reason?: string;
   informational: boolean;
 }
 
@@ -136,6 +137,19 @@ export interface ApprovalDecision {
   approval: "accepted" | "rejected";
   approver: string;
   decided_at: string;
+  reason?: string;
+}
+
+/** A named person's decision on one ledger entry (sidecar.ledger_decisions). Memory only. */
+export interface LedgerDecision {
+  approval: "accepted" | "rejected";
+  approver: string;
+  decided_at: string;
+  reason: string;
+}
+
+export interface Sidecar {
+  ledger_decisions: Record<string, LedgerDecision>;
 }
 
 export interface TighteningSelection {
@@ -279,6 +293,24 @@ export interface Verdict {
   notes: string[];
 }
 
+/** Gates and the report. A tightening selection adds a separate verdict for that artifact. */
+export interface GrimoireRequest extends ProveRequest {
+  name?: string;
+  sidecar?: Sidecar;
+  tightening?: TighteningSelection;
+}
+
+/** The verdict on the tightened artifact: a separate change judged on its own evidence. */
+export interface TightenedGate {
+  verdict: Verdict;
+  proof_passed: boolean | null;
+  golden_total: number;
+  golden_passed: number;
+  applied: string[];
+  accepted: number;
+  ledger: LedgerEntry[];
+}
+
 /** The Grimoire: the verdict plus the report as Markdown and print-ready HTML (redacted). */
 export interface GrimoireResult {
   api_version: string;
@@ -291,6 +323,8 @@ export interface GrimoireResult {
   profile: string;
   golden_total: number;
   golden_passed: number;
+  ledger?: LedgerEntry[]; // baseline, with the sent decisions applied
+  tightened?: TightenedGate | null; // present only when a tightening selection was sent
   markdown: string;
   html: string;
   body_sha256: string;

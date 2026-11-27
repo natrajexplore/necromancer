@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { makeQueryClient, tightenedKey, type Crypt } from "../api/hooks";
+import { makeQueryClient, selectionKey, tightenedKey, type Crypt } from "../api/hooks";
 import type {
   AutopsyResult,
   Counterexample,
@@ -15,6 +15,7 @@ import type {
   ProveResult,
   ResurrectResult,
   TightenedResult,
+  TighteningSelection,
 } from "../api/types";
 import { SAMPLES } from "../samples";
 import { exhumeResult, json, mockApi } from "../test/api";
@@ -658,5 +659,154 @@ describe("Verdict and Grimoire", () => {
     renderWith(<Verdict crypt={UPLOAD} />, client);
     await user.click(screen.getByRole("button", { name: "Run the gates" }));
     expect(await screen.findByRole("button", { name: "Download tightened PAN-OS config (.txt)" })).toBeInTheDocument();
+  });
+});
+
+const SELECTION: TighteningSelection = {
+  choices: [{ finding_id: "AUT-0001", kind: "remove-rule" }],
+  approvals: {
+    "AUT-0001": { approval: "accepted", approver: "A. Reviewer", decided_at: "2026-11-24T10:00:00Z" },
+  },
+};
+
+const PROVED: TightenedResult = {
+  ...TIGHTENED,
+  ledger: [
+    entry({ id: "TGT-0001", class: "tightening", approval: "accepted", approver: "A. Reviewer", finding_ref: "AUT-0001" }),
+    entry({ id: "LED-0001" }),
+  ],
+};
+
+const GO_VERDICT = { ...GRIMOIRE.verdict, value: "GO" as const, gates: [], blocking_reasons: [] };
+
+const GRIMOIRE_BOTH: GrimoireResult = {
+  ...GRIMOIRE,
+  tightened: {
+    verdict: GO_VERDICT,
+    proof_passed: true,
+    golden_total: 2,
+    golden_passed: 2,
+    applied: ["AUT-0001"],
+    accepted: 1,
+    ledger: PROVED.ledger,
+  },
+};
+
+describe("Verdict: gating the tightened artifact", () => {
+  function setup(grimoire: GrimoireResult = GRIMOIRE_BOTH, proved = true) {
+    const client = makeQueryClient();
+    if (proved) {
+      client.setQueryData(tightenedKey(UPLOAD), PROVED);
+      client.setQueryData(selectionKey(UPLOAD), SELECTION);
+    }
+    const fetchMock = mockApi({ "/v1/grimoire": () => json(grimoire), "/v1/resurrect": () => json(RESURRECT) });
+    renderWith(<Verdict crypt={UPLOAD} />, client);
+    return { fetchMock, user: userEvent.setup() };
+  }
+
+  const sent = (fetchMock: ReturnType<typeof mockApi>, index = 0) =>
+    JSON.parse(String(fetchMock.mock.calls.filter((c) => String(c[0]).includes("grimoire"))[index]?.[1]?.body)) as Record<string, unknown>;
+
+  it("names the input in the request, so the report title is not 'config'", async () => {
+    const { fetchMock, user } = setup(GRIMOIRE, false);
+    await user.click(screen.getByRole("button", { name: "Run the gates" }));
+    await screen.findByRole("heading", { name: "Readiness verdict" });
+    expect(sent(fetchMock)).toMatchObject({ name: "edge.cfg" });
+    expect(sent(fetchMock)).not.toHaveProperty("tightening");
+    expect(sent(fetchMock)).not.toHaveProperty("sidecar");
+  });
+
+  it("enables the tightened switch only once a proved tightened artifact exists", async () => {
+    setup(GRIMOIRE, false);
+    const group = screen.getByRole("group", { name: "Judge" });
+    expect(within(group).getByRole("button", { name: "baseline" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(group).getByRole("button", { name: "tightened (0 accepted)" })).toBeDisabled();
+  });
+
+  it("does not enable it for a tightened artifact whose proof failed", async () => {
+    const client = makeQueryClient();
+    client.setQueryData(tightenedKey(UPLOAD), { ...PROVED, passed: false });
+    mockApi({ "/v1/resurrect": () => json(RESURRECT) });
+    renderWith(<Verdict crypt={UPLOAD} />, client);
+    expect(screen.getByRole("button", { name: /^tightened \(/ })).toBeDisabled();
+  });
+
+  it("judges the tightened artifact, sends its selection and shows which artifact the badge is for", async () => {
+    const { fetchMock, user } = setup();
+    const tightened = screen.getByRole("button", { name: "tightened (1 accepted)" });
+    expect(tightened).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Run the gates" }));
+    await screen.findByRole("heading", { name: "Readiness verdict" });
+    expect(screen.getByTestId("verdict-artifact")).toHaveTextContent("baseline artifact (like for like)");
+    expect(screen.getByText("NO-GO")).toBeInTheDocument();
+    expect(sent(fetchMock)).toMatchObject({ tightening: SELECTION });
+
+    await user.click(tightened);
+    expect(screen.getByText("GO", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByTestId("verdict-artifact")).toHaveTextContent("tightened artifact (separate change)");
+    expect(screen.getByText(/Baseline: NO-GO. Tightened \(separate change\): GO./)).toBeInTheDocument();
+  });
+
+  it("asks for a new run when the results do not cover the tightened artifact", async () => {
+    const { user } = setup(GRIMOIRE);
+    await user.click(screen.getByRole("button", { name: "Run the gates" }));
+    await screen.findByRole("heading", { name: "Readiness verdict" });
+    await user.click(screen.getByRole("button", { name: "tightened (1 accepted)" }));
+    expect(screen.getByText(/do not cover the tightened artifact/)).toBeInTheDocument();
+  });
+
+  it("lists the pending entries of the judged artifact only", async () => {
+    const { user } = setup();
+    expect(screen.getByRole("heading", { name: "Pending ledger entries (baseline artifact)" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Accept LED-0002" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Accept TGT-0001" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "tightened (1 accepted)" }));
+    expect(screen.getByRole("heading", { name: "Pending ledger entries (tightened artifact)" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Accept LED-0002" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Accept TGT-0001" })).not.toBeInTheDocument(); // already decided
+    expect(screen.getByRole("button", { name: "Accept LED-0001" })).toBeInTheDocument();
+  });
+
+  it("needs a named approver and a reason before a decision can be made", async () => {
+    const { user } = setup();
+    const accept = await screen.findByRole("button", { name: "Accept LED-0001" });
+    expect(accept).toBeDisabled();
+    await user.type(screen.getByLabelText(/Approver name/), "A. Reviewer");
+    expect(accept).toBeDisabled();
+    await user.type(screen.getByLabelText("Reason for LED-0001 (required)"), "profile reviewed");
+    expect(accept).toBeEnabled();
+  });
+
+  it("sends the decisions as sidecar.ledger_decisions with approver, time and reason", async () => {
+    const { fetchMock, user } = setup();
+    await screen.findByRole("button", { name: "Accept LED-0001" });
+    await user.type(screen.getByLabelText(/Approver name/), "A. Reviewer");
+    await user.type(screen.getByLabelText("Reason for LED-0001 (required)"), "profile reviewed");
+    await user.type(screen.getByLabelText("Reason for LED-0002 (required)"), "schedule is not needed");
+    await user.click(screen.getByRole("button", { name: "Accept LED-0001" }));
+    await user.click(screen.getByRole("button", { name: "Reject LED-0002" }));
+    await user.click(screen.getByRole("button", { name: "Run the gates" }));
+    await screen.findByRole("heading", { name: "Readiness verdict" });
+    const body = sent(fetchMock) as { sidecar: { ledger_decisions: Record<string, Record<string, string>> } };
+    expect(body.sidecar.ledger_decisions["LED-0001"]).toMatchObject({
+      approval: "accepted",
+      approver: "A. Reviewer",
+      reason: "profile reviewed",
+    });
+    expect(body.sidecar.ledger_decisions["LED-0001"]?.decided_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(body.sidecar.ledger_decisions["LED-0002"]).toMatchObject({ approval: "rejected", reason: "schedule is not needed" });
+    expect(localStorage.length + sessionStorage.length).toBe(0);
+  });
+
+  it("takes a decision back when the same button is pressed again", async () => {
+    const { fetchMock, user } = setup(GRIMOIRE, false);
+    await screen.findByRole("button", { name: "Accept LED-0001" });
+    await user.type(screen.getByLabelText(/Approver name/), "A. Reviewer");
+    await user.type(screen.getByLabelText("Reason for LED-0001 (required)"), "ok");
+    await user.click(screen.getByRole("button", { name: "Accept LED-0001" }));
+    await user.click(screen.getByRole("button", { name: "Accept LED-0001" }));
+    await user.click(screen.getByRole("button", { name: "Run the gates" }));
+    await screen.findByRole("heading", { name: "Readiness verdict" });
+    expect(sent(fetchMock)).not.toHaveProperty("sidecar");
   });
 });

@@ -198,7 +198,8 @@ def _approval(entry: LedgerEntry) -> str:
         return "pending"
     who = f" by {entry.approver}" if entry.approver else ""
     when = f" on {entry.decided_at}" if entry.decided_at else ""
-    return f"{entry.approval.value}{who}{when}"
+    why = f": {entry.decision_reason}" if entry.decision_reason else ""
+    return f"{entry.approval.value}{who}{when}{why}"
 
 
 def ledger_rows(entries: list[LedgerEntry]) -> tuple[tuple[str, ...], ...]:

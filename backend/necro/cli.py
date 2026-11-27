@@ -5,7 +5,9 @@
           [--seed N] [--profile dev|ci|demo] [--budget N]
           [--golden FILE.toml] [--sidecar FILE.json|FILE.toml]
 
-Exit codes: 0 = GO / CONDITIONAL / pass, 1 = NO-GO / divergence, 2 = input error. ``exhume``,
+Exit codes: 0 = GO / CONDITIONAL / pass, 1 = NO-GO / divergence, 2 = input error. ``gate`` with
+``--tightening`` judges the tightened artifact as a separate verdict and exits 1 when either
+verdict is NO-GO. ``exhume``,
 ``autopsy``, ``resurrect`` and ``grimoire`` exit 0 when they complete: the report states the
 verdict, ``gate`` is the command to gate a pipeline on. ``gate`` and ``grimoire`` default to the
 ``ci`` budget (a GO verdict needs it), not to ``$HYPOTHESIS_PROFILE``. ``--format html`` is for
@@ -71,9 +73,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--tightening",
         type=Path,
-        help="resurrect only: JSON file with the chosen remediations, "
-        '{"choices": [{"finding_id": "F-001", "networks": []}], "approvals": {}}. '
-        "Adds a separate tightened artifact with its own ledger and proof",
+        help="resurrect, gate and grimoire: JSON file with the chosen remediations, "
+        '{"choices": [{"finding_id": "AUT-0001", "networks": []}], "approvals": {}}. '
+        "Adds a separate tightened artifact with its own ledger and proof (resurrect) or its "
+        "own verdict (gate, grimoire)",
     )
     parser.add_argument(
         "--artifact",
@@ -150,6 +153,7 @@ def _assess(args: argparse.Namespace, text: str) -> Assessment:
         profile=args.profile,
         golden=_golden(args),
         input_name=args.file.name,
+        tightening=_selection(args.tightening),
     )
 
 
@@ -160,8 +164,10 @@ def _run(args: argparse.Namespace) -> int:
         raise NecroError("invalid-format", "--format html is only available for grimoire")
     if args.haunt and args.command != "prove":
         raise NecroError("invalid-option", "--haunt is only available for prove")
-    if args.tightening is not None and args.command != "resurrect":
-        raise NecroError("invalid-option", "--tightening is only available for resurrect")
+    if args.tightening is not None and args.command not in ("resurrect", "gate", "grimoire"):
+        raise NecroError(
+            "invalid-option", "--tightening is only available for resurrect, gate and grimoire"
+        )
     if args.artifact == "tightened" and args.tightening is None:
         raise NecroError("invalid-option", "--artifact tightened needs --tightening")
     if args.command == "exhume":
@@ -209,7 +215,8 @@ def _run(args: argparse.Namespace) -> int:
         assessed = _assess(args, text)
         gated = service.gate_response(assessed)
         _emit(gated, cli_format.gate_doc(gated), fmt)
-        return EXIT_DIVERGENCE if gated.verdict.value == "NO-GO" else EXIT_OK
+        judged = [gated.verdict, *([gated.tightened.verdict] if gated.tightened else [])]
+        return EXIT_DIVERGENCE if any(v.value == "NO-GO" for v in judged) else EXIT_OK
     else:
         assessed = _assess(args, text)
         if fmt == "json":

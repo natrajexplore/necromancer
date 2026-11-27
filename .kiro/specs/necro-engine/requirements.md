@@ -87,6 +87,8 @@ unparsed line, never silently ignored.
 5.2 **[P1]** Every change that alters a decision SHALL produce a ledger entry: `{id, class, reason, affected_match, context, old_action, new_action, finding_ref, approval: pending|accepted|rejected, approver, decided_at}`.
 5.3 **[P1]** Tightening SHALL be monotone (property P6).
 5.4 **[P1]** THE SYSTEM SHALL keep the baseline (like-for-like) and tightened outputs as separate artifacts, each with its own proof result (governance rule R1).
+5.5 **[P1]** WHEN the gates run with a tightening selection THE SYSTEM SHALL build the tightened artifact from that selection and judge it as a second, separate verdict next to the baseline verdict, which stays exactly what it is without a selection (R1, P6). Gate G4 SHALL use the tightened artifact's own proof and golden flows. Gate G6 SHALL judge the findings of the tightened policy, found by re-running autopsy on the tightened IR, so that a critical finding counts as cleared only when the tightened artifact no longer has it, never because a proposal was accepted.
+5.6 **[P1]** A decision on a ledger entry SHALL carry a named approver, a decided-at time and a reason, supplied as `sidecar.ledger_decisions`. THE SYSTEM SHALL use it for the response only and SHALL NOT store it.
 
 ## Requirement 6: Proof of Life (property-based oracle)
 **User story:** As a change approver, I want evidence that the new policy behaves like the old one, so I can approve the migration.

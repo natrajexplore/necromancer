@@ -58,6 +58,9 @@ class GateRequest(ProveRequest):
     beats the golden flows of ``sample``."""
 
     sidecar: Sidecar | None = None
+    # the remediations to build and judge a tightened artifact from, as for resurrect. The
+    # baseline verdict is the same with or without it (governance R1)
+    tightening: TighteningSelection | None = None
     golden: str | None = Field(default=None, max_length=MAX_GOLDEN_CHARS)
     name: str | None = Field(default=None, max_length=120)  # label of the input in the report
 
@@ -204,8 +207,27 @@ class ProveResult(BaseModel):
     haunted: bool = False  # True: the proof ran on a deliberately broken candidate (necro.haunt)
 
 
+class TightenedGate(BaseModel):
+    """The verdict on the tightened artifact: a separate change judged on its own evidence.
+
+    G4 reads the tightened artifact's own proof, G6 the findings of the tightened policy.
+    ``ledger`` holds its entries with the sidecar's decisions applied. ``accepted`` counts the
+    remediations a person accepted."""
+
+    verdict: Verdict
+    proof_passed: bool | None
+    golden_total: int
+    golden_passed: int
+    applied: list[str]
+    accepted: int
+    ledger: list[LedgerEntry]
+
+
 class GateResponse(BaseModel):
-    """Gates G1 to G6 and the readiness verdict, with the audit header on the verdict."""
+    """Gates G1 to G6 and the readiness verdict, with the audit header on the verdict.
+
+    ``verdict`` is the baseline (like for like). ``tightened`` is present only when a tightening
+    selection was sent, and never changes ``verdict``."""
 
     api_version: str = API_VERSION
     dialect: str
@@ -217,6 +239,8 @@ class GateResponse(BaseModel):
     profile: str
     golden_total: int
     golden_passed: int
+    ledger: list[LedgerEntry] = Field(default_factory=list)  # baseline, decisions applied
+    tightened: TightenedGate | None = None
 
 
 class GrimoireResponse(GateResponse):

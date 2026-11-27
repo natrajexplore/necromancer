@@ -52,6 +52,7 @@ class TightenedCore:
     proof: ProofResult | None
     proof_error: str
     matrix: ZoneMatrix
+    findings: list[Finding]  # autopsy of the tightened policy (see ``tightened_findings``)
 
 
 @dataclass(frozen=True)
@@ -123,6 +124,7 @@ def apply_decisions(ledger: Sequence[LedgerEntry], sidecar: Sidecar) -> list[Led
                 "approval": decision.approval,
                 "approver": decision.approver,
                 "decided_at": decision.decided_at,
+                "decision_reason": decision.reason,
             }
             out.append(entry.model_copy(update=update))
     return out
@@ -151,6 +153,57 @@ def _commands(policy: Policy, emission: PanosEmission, golden: Sequence[GoldenVe
         return Commands(source_note=f"Verification commands could not be built: {exc}.")
 
 
+def tightened_findings(baseline: Sequence[Finding], policy: Policy) -> list[Finding]:
+    """The autopsy findings of the tightened policy, so that gate G6 judges what is really left.
+
+    A finding that the baseline also has (same type, same rule) keeps the baseline id, so an
+    accepted-risk record for it still applies. A new finding gets ``<id>-T``, which cannot
+    collide with a baseline id.
+    """
+    known = {(f.type, f.rule_ref): f.id for f in baseline}
+    return [
+        f.model_copy(update={"id": known.get((f.type, f.rule_ref), f"{f.id}-T")})
+        for f in analyze(policy)
+    ]
+
+
+def _entry_key(entry: LedgerEntry) -> tuple[str, str, str, str, str, str]:
+    return (
+        entry.entry_class.value,
+        entry.context,
+        entry.reason,
+        entry.affected,
+        entry.old_action.value,
+        entry.new_action.value,
+    )
+
+
+def _tightened_sidecar(
+    sidecar: Sidecar, baseline: Sequence[LedgerEntry], tightened: Sequence[LedgerEntry]
+) -> tuple[Sidecar, list[str]]:
+    """The sidecar for the tightened verdict, without decisions on ambiguous ledger ids.
+
+    Ids are numbered per artifact. When the same id names a different entry in the baseline and
+    in the tightened ledger, one decision cannot be trusted for both: the tightened artifact
+    ignores it (the entry stays pending) and says so.
+    """
+    before = {e.id: _entry_key(e) for e in baseline}
+    ambiguous = sorted(
+        e.id
+        for e in tightened
+        if e.id in sidecar.ledger_decisions and e.id in before and before[e.id] != _entry_key(e)
+    )
+    if not ambiguous:
+        return sidecar, []
+    kept = {k: v for k, v in sidecar.ledger_decisions.items() if k not in ambiguous}
+    notes = [
+        f"{entry_id} names a different entry in the tightened ledger than in the baseline "
+        "ledger, so the decision was not applied to the tightened artifact"
+        for entry_id in ambiguous
+    ]
+    return sidecar.model_copy(update={"ledger_decisions": kept}), notes
+
+
 def _tighten(
     policy: Policy,
     findings: list[Finding],
@@ -168,6 +221,7 @@ def _tighten(
         proof=proof,
         proof_error=error,
         matrix=matrix_after(artifact.emission.text),
+        findings=tightened_findings(findings, artifact.result.policy),
     )
 
 
@@ -256,21 +310,22 @@ def assemble(core: Core, sidecar: Sidecar, today: date, generated_at: datetime) 
     if core.tightened is not None:
         artifact = core.tightened.artifact
         tightening_entries = artifact.result.ledger
-        tightened = TightenedAssessment(
-            core.tightened,
-            evaluate(
-                core.policy,
-                core.findings,
-                artifact.emission,
-                core.tightened.validation,
-                core.tightened.proof,
-                artifact.ledger,
-                sidecar,
-                today,
-                audit=audit,
-            ),
-            apply_decisions(artifact.ledger, sidecar),
+        own, notes = _tightened_sidecar(sidecar, core.emission.ledger, artifact.ledger)
+        judged = evaluate(
+            core.policy,
+            core.tightened.findings,
+            artifact.emission,
+            core.tightened.validation,
+            core.tightened.proof,
+            artifact.ledger,
+            own,
+            today,
+            audit=audit,
         )
+        if notes:
+            judged = judged.model_copy(update={"notes": [*judged.notes, *notes]})
+        shown = apply_decisions(artifact.ledger, own)
+        tightened = TightenedAssessment(core.tightened, judged, shown)
     runbook = build_runbook(
         core.policy,
         core.emission,

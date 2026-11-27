@@ -200,7 +200,9 @@ def test_gate_runs_golden_flows_given_as_toml_text(client: TestClient) -> None:
 def test_grimoire_returns_markdown_html_and_a_body_hash(client: TestClient) -> None:
     first = _post(client, "grimoire", dialect="pix", budget=40, name="hq-firewall.cfg").json()  # type: ignore[attr-defined]
     second = _post(client, "grimoire", dialect="pix", budget=40, name="hq-firewall.cfg").json()  # type: ignore[attr-defined]
-    assert first["markdown"].startswith("# Grimoire: migration evidence report: hq-firewall.cfg\n")
+    assert first["markdown"].startswith(
+        "# Grimoire: migration evidence report: hq-firewall.cfg (baseline artifact)\n"
+    )
     assert first["html"].startswith("<!DOCTYPE html>") and "<h2>10. Appendix</h2>" in first["html"]
     assert re.findall(r"^## (\d+)\. ", first["markdown"], flags=re.MULTILINE) == [
         str(n) for n in range(1, 11)
