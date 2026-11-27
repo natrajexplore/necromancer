@@ -50,7 +50,7 @@ These are not negotiable. CI or review will reject a change that breaks one.
 
 ## Development workflow
 1. **Pick a task** from a spec's `tasks.md`. Phase 1 (**[P1]**) tasks come before Phase 2 (**[P2]**).
-2. **Run it in Kiro** (IDE "Start task", the CLI or Crew). The steering docs load automatically, and the hooks run the
+2. **Run it in Kiro** (this project used Kiro CLI). The steering docs load automatically, and the hooks run the
    proof on save, guard samples and golden flows, block secrets and check traceability.
 3. **Check locally**:
    ```bash

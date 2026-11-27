@@ -1,33 +1,48 @@
-# Kiro Crew: "The Séance" multi-agent workflow
+# Kiro Crew: "The Séance" (design, not built)
 
-Target: **Best Kiro Crew App** bonus ($1k). Needs a Kiro Crew GitHub repo link from the **same GitHub account** as the submission.
+**Status: this is a design only. Nothing in this repository runs as a Kiro Crew.** There is no Crew workflow, no
+exported Crew configuration, no schedule and no `crew/artifacts/` folder. NECROMANCER is not entered for a Kiro Crew
+prize, and no part of the README or the Devpost text claims Crew use.
 
-## Idea
-A persistent Crew that runs a migration ritual unattended across every config in `samples/dead-configs/`. It escalates to you only at approval gates.
+The folder is kept because the idea is a natural next step, and because it records what exists today that such a Crew
+would build on.
+
+## The idea
+
+A persistent Crew that runs the migration ritual unattended across every config in `samples/dead-configs/`, and escalates
+to a person only at approval gates.
 
 ```
             ┌─────────────── Séance Coordinator (Crew default agent) ───────────────┐
  config ──► │ ghoul-parser ─► autopsy-surgeon ─┬─► necromancer ─► oracle ─► gatekeeper │
             │                                  └── approval gate: accept tightening │
-            │  heartbeat: re-run oracle nightly on main; alert on any divergence     │
+            │  heartbeat: re-run the oracle nightly on main; alert on any divergence │
             └────────────────────────────────────────────────────────────────────────┘
 ```
 
-| Crew feature | How we use it |
+| Crew feature | How it would be used |
 |---|---|
-| Subagents | The 5 custom agents in `.kiro/agents/` run as specialists |
-| Approval gates | You approve each zero-trust tightening before the necromancer applies it, and each waiver before the gatekeeper issues a verdict |
-| Workflows / Task Runner | One multi-step task per sample config, with checkpoints |
-| Scheduling / heartbeat | Nightly job: `pytest -m pbt` with the `ci` profile on `main`. Alerts (Discord or Telegram) if Proof of Life fails |
-| Artifacts | Each run saves the verdict, Grimoire report, runbook and the baseline (and tightened) PAN-OS configs into `crew/artifacts/<config>/` |
-| Activity view | Screenshots of the plan, tool calls and gates go in the write-up and the video |
+| Subagents | The five custom agents in `.kiro/agents/` as specialists |
+| Approval gates | A person approves each tightening before it is applied, and each waiver before a verdict is issued |
+| Workflows | One multi-step task per sample config, with checkpoints |
+| Scheduling | A nightly `pytest -m pbt` run at the `ci` profile on `main`, with an alert when Proof of Life fails |
+| Artifacts | The verdict, report, runbook and the baseline and tightened PAN-OS configs per config |
 
-## Setup (verify against current docs at kiro.dev/docs/crew before running)
-1. Install: see kiro.dev/docs/crew/installation. Open the dashboard (default `http://localhost:5476`).
-2. Point Crew at this repository. Import or recreate the agents from `.kiro/agents/`.
-3. Create the workflow "Séance" with the steps above. Add an approval gate before the tightening step.
-4. Schedule the nightly Proof of Life heartbeat.
-5. Run it once per sample config. Export the artifacts and screenshots into `crew/artifacts/`.
-6. Record which parts were easier in Crew than in the IDE or CLI. This feeds the write-up section "IDE vs CLI vs Web vs Crew".
+## What exists today
 
-> Crew features and file formats change quickly (it's at v0.x). Configure everything through the Crew dashboard or docs, and commit the exported config here instead of hand-writing formats.
+- The five agent definitions and prompts in `.kiro/agents/`. The journal records one of them (`gatekeeper`) in use.
+- The engine operations a Crew would call, through the CLI (`python -m necro ...`), the API and the MCP server.
+- The approval steps as data: the tightening selection (`--tightening FILE`) and the sidecar with ledger decisions
+  (`--sidecar FILE`).
+- A related check in CI: the `ci.yml` workflow runs the property-based tests on every push and pull request. It is not a
+  nightly schedule and it is not a Crew.
+
+## What would have to be built
+
+1. Install Kiro Crew and import or recreate the five agents.
+2. Create the workflow with an approval gate before the tightening step.
+3. Schedule the nightly Proof of Life run and an alert channel.
+4. Run it once per sample config and keep the exported configuration and artifacts here.
+
+Kiro Crew is a young product and its formats change. Check the current Kiro documentation before building it, and commit
+the exported configuration rather than writing a format by hand.

@@ -1,5 +1,7 @@
 # Idea Selection — Why NECROMANCER
 
+> **Planning document.** Written before the build to plan the submission. It is kept for history and does not describe what was built. Plans in it that were not carried out include Kiro Crew, Kiro Web and a vibe-coded Check Point comparison. See the [README](../README.md) and [evidence](evidence.md) for what exists.
+
 ## Selection principles (from the rules + your edge)
 
 1. **Win all 5 criteria evenly.** Each one is 20%, so a flashy idea with weak impact loses.

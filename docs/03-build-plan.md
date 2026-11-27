@@ -1,5 +1,7 @@
 # 25-Day Build Plan (Nov 10 → Dec 4)
 
+> **Planning document.** Written before the build to plan the submission. It is kept for history and does not describe what was built. Plans in it that were not carried out include Kiro Crew, Kiro Web and a vibe-coded Check Point comparison. See the [README](../README.md) and [evidence](evidence.md) for what exists.
+
 Rule of thumb: **Kiro writes the code, you steer.** Each task in `.kiro/specs/*/tasks.md` is run in Kiro (IDE "Start task", or CLI / Crew), then committed with a `kiro-task: <id>` trailer. That builds the evidence trail for the "Technological Implementation" score.
 
 ## Re-baselined plan (Nov 16)

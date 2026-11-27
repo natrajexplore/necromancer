@@ -204,12 +204,11 @@
 - What the human corrected: The human set the scope (no deploy, no hardcoded account, region or e-mail, no BOM); Kiro flagged the per-IP limiter seeing CloudFront edge IPs.
 - Kiro feature used: hooks, steering
 
-## 2026-11-27 � CLI
+## 2026-11-27 — CLI
 - Spec task(s): none (vibe)
 - What Kiro did: Declined to run interactive 'aws configure' and explained the manual steps and profile setup.
 - What the human corrected: nothing yet
 - Kiro feature used: steering
-
 
 ## 2026-11-27 — CLI
 - Spec task(s): none (vibe)
@@ -217,32 +216,31 @@
 - What the human corrected: nothing
 - Kiro feature used: steering
 
-
 ## 2026-11-27 — CLI
 - Spec task(s): none (vibe)
 - What Kiro did: Added the EnableCdn fallback: conditional CloudFront resources in template.yaml, API-served UI with SPA fallback and security headers (api/static.py), deploy.ps1 -NoCdn, DEPLOY.md section, tests; sam validate --lint and the full suite pass.
 - What the human corrected: The human asked for the fallback because CloudFront is blocked until AWS verifies the account.
 - Kiro feature used: steering, hooks
 
-## 2026-11-28 — CLI
+## 2026-11-27 — CLI
 - Spec task(s): necro-engine/7.1, migration-governance/11
 - What Kiro did: Added requirements 5.5, 5.6 and governance 1.8, 2.5, 4.8, 6.3, 6.4 first, then made gate, grimoire, necro gate --tightening and the MCP gate tool take the tightening selection. service.assess builds core.tightened from it. The tightened verdict is separate: G6 re-runs autopsy on the tightened IR (baseline finding ids kept, new ones get -T), G4 uses the tightened artifact's own proof and golden flows, the baseline verdict is unchanged, haunt is still refused. Ledger decisions carry a reason. The Verdict screen got pending-entry decisions (approver, reason), a baseline | tightened switch and an artifact label on the badge. The report title names the input and the artifacts. TGT reason now says "ssh (22/tcp) replaces telnet (23/tcp)". Tests: pix-2006-hq baseline NO-GO, tightened GO with AUT-0008 and LED-0001 accepted.
 - What the human corrected: The human asked for the spec change first and for G6 to count a finding as cleared only when the emitted tightened artifact no longer has it.
 - Kiro feature used: specs, steering, hooks
 
-## 2026-11-28 — CLI
+## 2026-11-27 — CLI
 - Spec task(s): necro-engine/7.1, migration-governance/11
 - What Kiro did: Ran the full backend suite, ruff, mypy and the frontend tests, then committed 509b3a6 and pushed it to main.
 - What the human corrected: nothing further
 - Kiro feature used: specs, hooks
 
-## 2026-11-28 — CLI
+## 2026-11-27 — CLI
 - Spec task(s): graveyard-ui/8, graveyard-ui/9
 - What Kiro did: Added axe, keyboard, focus and reduced-motion checks and Playwright smoke tests (ritual, haunted path) under frontend/e2e. Fixed tombstone names, moved focus after each step, added a favicon and robots.txt. Lighthouse desktop 100/100/100/100. Recorded in docs/a11y-lighthouse.md.
 - What the human corrected: The human asked for role and label locators, chromium only, no ci.yml edit, and the journal committed first.
 - Kiro feature used: specs, steering, hooks
 
-## 2026-11-28 — CLI
+## 2026-11-27 — CLI
 - Spec task(s): graveyard-ui/8, graveyard-ui/9
 - What Kiro did: Verified the final state (tsc, 124 vitest, 9 e2e, ruff, mypy, check_repo) and pushed bbd9009 to main.
 - What the human corrected: nothing further

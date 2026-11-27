@@ -1,5 +1,7 @@
 # Build-day guide: from specs to a demo-ready app in Kiro
 
+> **Planning document.** Written before the build to plan the submission. It is kept for history and does not describe what was built. Plans in it that were not carried out include Kiro Crew, Kiro Web and a vibe-coded Check Point comparison. See the [README](../README.md) and [evidence](evidence.md) for what exists.
+
 Goal: finish everything planned up to the Nov 30 feature freeze in one long Kiro session, then record the video on
 another day. **Kiro writes all application code.** You start tasks, review, test and commit.
 

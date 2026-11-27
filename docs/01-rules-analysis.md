@@ -1,5 +1,7 @@
 # Kiroween 2026 — Rules Analysis & Compliance Checklist
 
+> **Planning document.** Written before the build to plan the submission. It is kept for history and does not describe what was built. Plans in it that were not carried out include Kiro Crew, Kiro Web and a vibe-coded Check Point comparison. See the [README](../README.md) and [evidence](evidence.md) for what exists.
+
 Source: https://kiroween.devpost.com/rules and https://kiroween.devpost.com/ (read 10 Nov 2026).
 Sponsor: Amazon Web Services · Administrator: Devpost.
 
