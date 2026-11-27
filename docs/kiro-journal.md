@@ -247,3 +247,9 @@
 - What Kiro did: Verified the final state (tsc, 124 vitest, 9 e2e, ruff, mypy, check_repo) and pushed bbd9009 to main.
 - What the human corrected: nothing further
 - Kiro feature used: specs, hooks
+
+## 2026-11-27 — IDE
+- Spec task(s): none (vibe)
+- What Kiro did: Closed secret leaks in redact.py (type digits, aaa key, username attributes, isakmp, ftp, ppp, ikev1 psk), added a generic fallback and an API+CLI Hypothesis leak property, pushed 1dc597c.
+- What the human corrected: nothing yet; the human specified each leaking form up front.
+- Kiro feature used: steering, hooks, PBT
