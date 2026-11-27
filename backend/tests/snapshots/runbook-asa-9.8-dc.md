@@ -116,7 +116,7 @@ The change owner decides within 30 minutes of a trigger. Triggers:
 | [ ] | POST-03 | Collect sign-off from the application owner of each zone pair in the matrix. |
 | [ ] | POST-04 | Confirm that no unexplained denies remain after hypercare. |
 | [ ] | POST-05 | Decommission the source: remove it from production, archive its configuration per the retention policy, update the CMDB and IPAM, and record the decommission. |
-| [ ] | POST-06 | Rotate every shared secret that was on the source (3 redacted in this report). Consider them exposed. |
+| [ ] | POST-06 | Rotate every shared secret that was on the source (4 redacted in this report). Consider them exposed. |
 
 Hypercare lasts 10 business days. Rules and entries to watch:
 

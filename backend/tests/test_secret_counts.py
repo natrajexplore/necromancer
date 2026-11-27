@@ -29,6 +29,16 @@ LINES = [
     ("neighbor 10.0.0.2 password synthetic-bgp", "routing authentication key"),
     ("failover key synthetic-failover", "failover key"),
     (" password synthetic-vty", "line or device password"),
+    ("tacacs-server key 7 synthetic-tacacs7", "AAA shared key"),
+    ("radius-server key 7 synthetic-radius7", "AAA shared key"),
+    ("aaa-server T host 10.10.1.5 key synthetic-aaa", "AAA shared key"),
+    ("username a privilege 15 secret 5 synthetic-attr", "local user password"),
+    ("isakmp key synthetic-pix-psk address 198.51.100.9", "VPN pre-shared key"),
+    ("ftp-server password synthetic-ftp", "FTP server password"),
+    ("ppp chap password synthetic-ppp", "PPP authentication password"),
+    (" ikev1 pre-shared-key synthetic-ikev1", "VPN pre-shared key"),
+    ("some-future-cmd passphrase synthetic-pass", "passphrase"),
+    ("some-future-cmd authentication-key synthetic-auth", "routing authentication key"),
 ]
 
 

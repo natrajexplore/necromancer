@@ -317,3 +317,155 @@ def test_snmp_host_community_asa_form() -> None:
 def test_pbt_asa_snmp_host_community_redacted(secret: str) -> None:
     line = f"snmp-server host inside 192.0.2.10 community {secret} version 2c"
     assert r(line) == "snmp-server host inside 192.0.2.10 community <redacted> version 2c"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for confirmed leaks (one per leaking form). Each asserts the exact line:
+# the encryption-type digit stays, the secret and nothing else is replaced.
+# ---------------------------------------------------------------------------
+
+
+def test_leak_tacacs_server_key_with_type_digit() -> None:
+    assert r("tacacs-server key 7 S3cretTacacs") == "tacacs-server key 7 <redacted>"
+
+
+def test_leak_radius_server_key_with_type_digit() -> None:
+    assert r("radius-server key 7 S3cretRadius") == "radius-server key 7 <redacted>"
+    assert r("radius-server key S3cretRadius") == "radius-server key <redacted>"
+
+
+def test_leak_server_host_key_with_type_digit() -> None:
+    out = r("tacacs-server host 192.0.2.7 key 7 S3cretHost")
+    assert out == "tacacs-server host 192.0.2.7 key 7 <redacted>"
+
+
+def test_leak_aaa_server_host_with_key_keyword() -> None:
+    assert (
+        r("aaa-server T host 10.10.1.5 key S3cretAaa")
+        == "aaa-server T host 10.10.1.5 key <redacted>"
+    )
+    assert (
+        r("aaa-server T (inside) host 10.10.1.5 key S3cretAaa timeout 5")
+        == "aaa-server T (inside) host 10.10.1.5 key <redacted> timeout 5"
+    )
+    # Without the keyword the value is the word after the address.
+    assert r("aaa-server T host 10.10.1.5 S3cretAaa") == "aaa-server T host 10.10.1.5 <redacted>"
+
+
+def test_leak_username_attributes_before_secret() -> None:
+    out = r("username a privilege 15 secret 5 S3cretUser")
+    assert out == "username a privilege 15 secret 5 <redacted>"
+    assert r("username a privilege 15 password S3cretUser") == (
+        "username a privilege 15 password <redacted>"
+    )
+    assert r("username a password S3cretUser privilege 15") == (
+        "username a password <redacted> privilege 15"
+    )
+
+
+def test_leak_pix_isakmp_key_without_crypto() -> None:
+    out = r("isakmp key S3cretPsk address 192.0.2.9 netmask 255.255.255.255")
+    assert out == "isakmp key <redacted> address 192.0.2.9 netmask 255.255.255.255"
+    assert r("crypto isakmp key 6 S3cretPsk address 192.0.2.9") == (
+        "crypto isakmp key 6 <redacted> address 192.0.2.9"
+    )
+
+
+def test_leak_ftp_server_password() -> None:
+    assert r("ftp-server password S3cretFtp") == "ftp-server password <redacted>"
+    assert r("ip ftp password 7 S3cretFtp") == "ip ftp password 7 <redacted>"
+
+
+def test_leak_ppp_chap_password() -> None:
+    assert r("ppp chap password S3cretPpp") == "ppp chap password <redacted>"
+    assert r("ppp pap sent-username u password S3cretPpp") == (
+        "ppp pap sent-username u password <redacted>"
+    )
+
+
+def test_leak_ikev1_pre_shared_key_in_tunnel_group() -> None:
+    assert r(" ikev1 pre-shared-key S3cretPsk") == " ikev1 pre-shared-key <redacted>"
+
+
+def test_leak_enable_password_with_level() -> None:
+    assert r("enable password level 5 S3cretLvl") == "enable password level 5 <redacted>"
+
+
+def test_leak_snmp_user_priv_password() -> None:
+    out = r("snmp-server user u g v3 auth sha AuthPw1234 priv aes 128 PrivPw1234")
+    assert out == "snmp-server user u g v3 auth sha <redacted> priv aes 128 <redacted>"
+
+
+@pytest.mark.parametrize("enc", ["0", "5", "7", "md5", "sha"])
+def test_encryption_type_word_is_kept_and_the_secret_replaced(enc: str) -> None:
+    for head in (
+        "tacacs-server key",
+        "radius-server key",
+        "aaa-server T host 10.10.1.5 key",
+        "isakmp key",
+        "ftp-server password",
+        "ppp chap password",
+        "ntp-future passphrase",
+    ):
+        assert r(f"{head} {enc} S3cretValue") == f"{head} {enc} <redacted>", head
+
+
+# ---- generic fallback ----
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ("future-cmd password S3cret", "future-cmd password <redacted>"),
+        ("future-cmd secret 5 S3cret extra", "future-cmd secret 5 <redacted> extra"),
+        ("future-cmd community S3cret", "future-cmd community <redacted>"),
+        ("future-cmd pre-shared-key S3cret", "future-cmd pre-shared-key <redacted>"),
+        ("future-cmd key-string 7 S3cret", "future-cmd key-string 7 <redacted>"),
+        ("future-cmd passphrase md5 S3cret", "future-cmd passphrase md5 <redacted>"),
+        (
+            "future-cmd authentication-key sha256 S3cret",
+            "future-cmd authentication-key sha256 <redacted>",
+        ),
+        ("  future-cmd key S3cret", "  future-cmd key <redacted>"),
+    ],
+)
+def test_generic_fallback_redacts_the_word_after_the_keyword(line: str, expected: str) -> None:
+    assert r(line) == expected
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "access-list password extended permit tcp any any eq 22",
+        "access-list OUT extended permit tcp any object-group key eq 22",
+        "access-list secret remark key community",
+        "ip access-list extended password",
+        " permit tcp any host 192.0.2.1 object-group key",
+        "10 deny ip any any log secret",
+        "object-group network password",
+        "object-group service key tcp",
+        "object network secret",
+        " network-object object key",
+        "name 192.0.2.1 key description password",
+        "names",
+        "nameif password",
+        " nameif key",
+        "description the key community password",
+        "crypto key generate rsa modulus 2048",
+        "key chain CHAIN1",
+        "service password-encryption",
+        "hostname key",
+    ],
+)
+def test_generic_fallback_leaves_names_alone(line: str) -> None:
+    assert r(line) == line
+
+
+def test_the_generic_fallback_skips_lines_already_redacted() -> None:
+    assert r("enable password S3cret") == "enable password <redacted>"
+    assert r("snmp-server host inside 192.0.2.10 community S3cret version 2c").count(REDACTED) == 1
+
+
+def test_a_very_long_line_is_redacted_in_linear_time() -> None:
+    line = "future-cmd " + "password " * 50_000 + "S3cret"
+    assert "S3cret" not in redact(line)
