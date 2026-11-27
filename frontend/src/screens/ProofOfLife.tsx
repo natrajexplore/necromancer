@@ -6,6 +6,7 @@ import { CounterexampleCard } from "../components/CounterexampleCard";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Heartbeat, type BeatState } from "../components/Heartbeat";
 import { Hint } from "../components/Hint";
+import { useFocusOnChange } from "../lib/focus";
 import { plural } from "../lib/format";
 
 function Stat({ term, children }: { term: string; children: ReactNode }) {
@@ -92,6 +93,7 @@ export function ProofOfLife({ crypt }: { crypt: Crypt }) {
   const [haunt, setHaunt] = useState(false);
   const [askedHaunt, setAskedHaunt] = useState(false);
   const hauntId = useId();
+  const resultRef = useFocusOnChange<HTMLParagraphElement>(prove.data);
 
   const run = () => {
     setAskedHaunt(haunt);
@@ -153,7 +155,7 @@ export function ProofOfLife({ crypt }: { crypt: Crypt }) {
         )}
         {data && (
           <>
-            <p className="mt-4 text-lg text-bone">
+            <p ref={resultRef} tabIndex={-1} className="mt-4 text-lg text-bone">
               {data.passed
                 ? "The resurrected config behaved like the original on every flow checked."
                 : "The resurrected config diverged from the original."}

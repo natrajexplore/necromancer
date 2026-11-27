@@ -70,7 +70,7 @@ export function ExhumeZone({ onExhumed }: { onExhumed: (crypt: Crypt) => void })
         data-testid="drop-zone"
         className={`rounded-md border border-dashed px-3 py-4 text-center text-sm ${
           dragging ? "border-spectral text-spectral" : "border-stone text-ash"
-        }`}
+        } has-[input:focus-visible]:border-spectral has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-spectral`}
       >
         Drop a config file here, or{" "}
         <label htmlFor={fileId} className="cursor-pointer text-spectral underline underline-offset-4">

@@ -32,8 +32,9 @@ export const textPairs: ReadonlyArray<readonly [text: ColorToken, background: Co
   ["candle", "void"],
   ["candle", "crypt"],
   ["candle", "stone"],
-  ["void", "spectral"], // primary button
+  ["void", "spectral"], // primary button, and an accepted (pressed) toggle or the passing badge fill
   ["void", "candle"],
+  ["void", "blood"], // a rejected (pressed) toggle
 ];
 
 function channel(value: number): number {

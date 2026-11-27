@@ -23,7 +23,7 @@ export function GhostBadge({ finding }: { finding: Finding }) {
       <span aria-hidden="true">👻</span>
       <Hint explain={`${typeName(finding.type)}: ${finding.explanation}`}>{finding.label}</Hint>
       <span className="text-bone">
-        {typeName(finding.type)}, {finding.severity}
+        {typeName(finding.type)}, {finding.severity}, {finding.id}
       </span>
     </span>
   );

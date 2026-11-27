@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { configDefaults } from "vitest/config";
 import { defineConfig } from "vite";
 
 // The repository root: the bundled sample configs are imported from ../samples with `?raw`.
@@ -30,6 +31,8 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     restoreMocks: true,
+    // Playwright specs under e2e/ run with `npm run e2e`, not in vitest.
+    exclude: [...configDefaults.exclude, "e2e/**"],
     css: false,
     // jsdom gives modules a non-file import.meta.url, so tests that read repo files get the root here.
     env: { NECRO_REPO_ROOT: repoRoot },

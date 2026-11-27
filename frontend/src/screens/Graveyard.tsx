@@ -28,7 +28,7 @@ function UploadTombstone({ crypt, selected, onSelect }: { crypt: Crypt; selected
       title={crypt.name}
       selected={selected}
       onSelect={onSelect}
-      label={`${crypt.name}: ${dialectLabel(data.dialect, data.os_version)}, detection confidence ${confidence(data.detection_confidence)}, coverage ${percent(data.coverage.ratio)}, ${plural(data.unparsed.length, "line")} not migrated, ${relevant} security-relevant`}
+      description={`${crypt.name}: ${dialectLabel(data.dialect, data.os_version)}, detection confidence ${confidence(data.detection_confidence)}, coverage ${percent(data.coverage.ratio)}, ${notMigrated}, ${relevant} security-relevant.`}
       lines={[
         dialectLabel(data.dialect, data.os_version),
         `confidence ${confidence(data.detection_confidence)}`,
@@ -71,7 +71,7 @@ export function Graveyard() {
                 title={crypt.name}
                 selected={crypt.id === selectedId}
                 onSelect={() => setSelectedId(crypt.id)}
-                label={`${crypt.name}: synthetic ${platform} config, ${plural(sample.rules, "rule")}, died ${sample.died} (fictional year)`}
+                description={`${crypt.name}: synthetic ${platform} config, ${plural(sample.rules, "rule")}, died ${sample.died} (a fictional year).`}
                 lines={[platform, plural(sample.rules, "rule"), `died ${sample.died}`]}
               />
             </li>

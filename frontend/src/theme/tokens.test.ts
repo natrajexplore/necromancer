@@ -27,6 +27,14 @@ describe("design tokens", () => {
     expect(contrast(colors[text], colors[background])).toBeGreaterThanOrEqual(4.5);
   });
 
+  it.each([
+    ["spectral", "crypt", "GO badge, passing proof"],
+    ["blood", "crypt", "NO-GO badge, divergence, critical ghost"],
+    ["candle", "crypt", "CONDITIONAL badge, warnings"],
+  ] as const)("%s on %s (%s) keeps 4.5:1 for text, which also covers 3:1 for its border", (color, background, _use) => {
+    expect(contrast(colors[color], colors[background])).toBeGreaterThanOrEqual(4.5);
+  });
+
   it("computes WCAG contrast correctly", () => {
     expect(contrast("#000000", "#ffffff")).toBeCloseTo(21, 5);
     expect(contrast("#777777", "#777777")).toBe(1);

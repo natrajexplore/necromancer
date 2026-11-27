@@ -185,5 +185,15 @@ def create_app(
     return app
 
 
-app = create_app()
+def _rate_from_env() -> int:
+    """``NECRO_RATE_PER_MINUTE`` lifts the per-client limit for local end-to-end runs.
+
+    The default stays 10 (security steering "Runtime"). A value that is not a whole number from 1
+    to 100000 is ignored, so a typo cannot switch the limit off.
+    """
+    raw = os.environ.get("NECRO_RATE_PER_MINUTE", "")
+    return int(raw) if raw.isdigit() and 1 <= int(raw) <= 100_000 else RATE_PER_MINUTE
+
+
+app = create_app(rate_per_minute=_rate_from_env())
 handler = Mangum(app, lifespan="off")

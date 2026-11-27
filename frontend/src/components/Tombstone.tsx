@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 /** The headstone outline, drawn by hand for this project (no third-party artwork). */
 function Headstone({ selected }: { selected: boolean }) {
@@ -27,31 +27,40 @@ function Headstone({ selected }: { selected: boolean }) {
 export interface TombstoneProps {
   title: string;
   lines: ReactNode[];
-  /** The full plain-English description read by screen readers instead of the visible lines. */
-  label: string;
+  /**
+   * The full plain-English description, read by screen readers after the name. The name itself is
+   * the visible text, so it always contains what a sighted person reads (WCAG 2.5.3).
+   */
+  description: string;
   selected: boolean;
   onSelect: () => void;
 }
 
 /** One config in the graveyard. A real button: clickable, focusable, Enter/Space to open. */
-export function Tombstone({ title, lines, label, selected, onSelect }: TombstoneProps) {
+export function Tombstone({ title, lines, description, selected, onSelect }: TombstoneProps) {
+  const descriptionId = useId();
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      aria-label={label}
-      className="relative flex h-64 w-full cursor-pointer flex-col items-center justify-end text-center transition-transform duration-200 hover:-translate-y-1"
-    >
-      <Headstone selected={selected} />
-      <span className="relative z-10 flex flex-col items-center gap-1 px-7 pb-7">
-        <span className="font-display text-xl leading-tight break-all text-bone">{title}</span>
-        {lines.map((line, index) => (
-          <span key={index} className="text-sm text-ash">
-            {line}
-          </span>
-        ))}
+    <>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
+        aria-describedby={descriptionId}
+        className="relative flex h-64 w-full cursor-pointer flex-col items-center justify-end text-center transition-transform duration-200 hover:-translate-y-1"
+      >
+        <Headstone selected={selected} />
+        <span className="relative z-10 flex flex-col items-center gap-1 px-7 pb-7">
+          <span className="font-display text-xl leading-tight break-all text-bone">{title}</span>{" "}
+          {lines.map((line, index) => (
+            <span key={index} className="text-sm text-ash">
+              {line}{" "}
+            </span>
+          ))}
+        </span>
+      </button>
+      <span id={descriptionId} className="sr-only">
+        {description}
       </span>
-    </button>
+    </>
   );
 }

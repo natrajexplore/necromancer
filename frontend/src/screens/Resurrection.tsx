@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 
 import { useResurrect, useTighten, useTightened, type Crypt } from "../api/hooks";
 import type { Proposal } from "../api/types";
@@ -6,6 +6,7 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { LiveLedger } from "../components/LiveLedger";
 import { TighteningPanel } from "../components/TighteningPanel";
 import { motionSeconds, usePrefersReducedMotion } from "../lib/motion";
+import { useFocusOnChange } from "../lib/focus";
 import { plural } from "../lib/format";
 import { buildSelection, type FindingDecision, type FindingDecisions, type NetworkText } from "../lib/tightening";
 
@@ -57,9 +58,9 @@ export function SplitConfig({ crypt, candidate }: { crypt: Crypt; candidate: str
   );
 }
 
-function RiseStage({ name, seconds }: { name: string; seconds: number }) {
+function RiseStage({ name, seconds, innerRef }: { name: string; seconds: number; innerRef: RefObject<HTMLDivElement> }) {
   return (
-    <div role="status" className="flex flex-col items-center py-10" data-testid="rise">
+    <div role="status" ref={innerRef} tabIndex={-1} className="flex flex-col items-center py-10" data-testid="rise">
       <div className={seconds > 0 ? "rise" : ""} aria-hidden="true">
         <svg viewBox="0 0 80 100" width="96" height="120" role="presentation">
           <path d="M10 98V40a30 30 0 0 1 60 0v58z" fill="#2a2733" stroke="#7cf5b0" strokeWidth="2" />
@@ -83,6 +84,13 @@ export function Resurrection({ crypt }: { crypt: Crypt }) {
   const tighten = useTighten(crypt);
   const stored = useTightened(crypt);
   const seconds = motionSeconds(RISE_SECONDS, reduced);
+  // Focus follows the step: the rise while it plays, then the result, then the tightened artifact.
+  const riseRef = useRef<HTMLDivElement>(null);
+  const resultRef = useFocusOnChange<HTMLParagraphElement>(started && risen && result.data);
+  const summaryRef = useFocusOnChange<HTMLHeadingElement>(stored.data);
+  useEffect(() => {
+    if (started && !risen) riseRef.current?.focus();
+  }, [started, risen]);
 
   useEffect(() => {
     if (!started) return undefined;
@@ -130,12 +138,12 @@ export function Resurrection({ crypt }: { crypt: Crypt }) {
     );
   }
   if (result.isError) return <ErrorNotice error={result.error} what="resurrected" />;
-  if (!risen || !result.data) return <RiseStage name={crypt.name} seconds={seconds} />;
+  if (!risen || !result.data) return <RiseStage name={crypt.name} seconds={seconds} innerRef={riseRef} />;
 
   const data = result.data;
   return (
     <div aria-live="polite">
-      <p className="text-bone">
+      <p ref={resultRef} tabIndex={-1} className="text-bone">
         {plural(data.config_lines, "line")} of PAN-OS candidate config,{" "}
         {plural(data.ledger.length, "ledger entry", "ledger entries")},{" "}
         {data.blocking.length === 0
@@ -173,6 +181,7 @@ export function Resurrection({ crypt }: { crypt: Crypt }) {
         proving={tighten.isPending}
         problem={problem}
         tightened={stored.data ?? null}
+        summaryRef={summaryRef}
       />
       {tighten.isError && <ErrorNotice error={tighten.error} what="tightened" />}
       <LiveLedger entries={data.ledger} decisions={{}} />

@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type RefObject } from "react";
 
 import type { Proposal, TightenedResult } from "../api/types";
 import { plural } from "../lib/format";
@@ -29,6 +29,7 @@ export function TighteningPanel({
   proving,
   problem,
   tightened,
+  summaryRef,
 }: {
   proposals: Proposal[];
   decisions: FindingDecisions;
@@ -41,6 +42,7 @@ export function TighteningPanel({
   proving: boolean;
   problem: string | null;
   tightened: TightenedResult | null;
+  summaryRef?: RefObject<HTMLHeadingElement>;
 }) {
   const approverId = useId();
   const accepted = proposals.filter((p) => decisions[p.finding_id] === "accepted").length;
@@ -104,7 +106,7 @@ export function TighteningPanel({
           )}
         </>
       )}
-      {tightened && <TightenedSummary tightened={tightened} />}
+      {tightened && <TightenedSummary tightened={tightened} headingRef={summaryRef} />}
     </section>
   );
 }
@@ -172,12 +174,20 @@ function ProposalRow({
 }
 
 /** The proof and ledger of the tightened artifact. Always shown with its ledger (governance R1). */
-export function TightenedSummary({ tightened }: { tightened: TightenedResult }) {
+export function TightenedSummary({
+  tightened,
+  headingRef,
+}: {
+  tightened: TightenedResult;
+  headingRef?: RefObject<HTMLHeadingElement> | undefined;
+}) {
   const proof = tightened.proof;
   const example = proof?.counterexample ?? proof?.golden.failures[0] ?? null;
   return (
     <div className="mt-6" data-testid="tightened-summary">
-      <h4 className="font-display text-lg text-bone">Tightened artifact (separate change)</h4>
+      <h4 ref={headingRef} tabIndex={-1} className="font-display text-lg text-bone">
+        Tightened artifact (separate change)
+      </h4>
       <p className="mt-1 text-bone">
         {plural(tightened.config_lines, "line")} of PAN-OS config,{" "}
         {plural(tightened.applied.length, "remediation")} applied. Proof of Life:{" "}

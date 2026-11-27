@@ -13,6 +13,7 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { LedgerDecisions } from "../components/LedgerDecisions";
 import { RunbookView } from "../components/RunbookView";
 import { download, printHtml, stem } from "../lib/download";
+import { useFocusOnChange } from "../lib/focus";
 import { parseRunbook } from "../lib/runbook";
 
 const VERDICT_TEXT: Record<VerdictValue, string> = {
@@ -254,6 +255,7 @@ export function Verdict({ crypt }: { crypt: Crypt }) {
   const [decisions, setDecisions] = useState<Record<string, LedgerDecision>>({});
   const [approver, setApprover] = useState("");
   const report = grimoire.data;
+  const headingRef = useFocusOnChange<HTMLHeadingElement>(report);
   const runbook = useMemo(() => (report ? parseRunbook(report.markdown) : []), [report]);
   // a tightened artifact counts only after its own proof passed
   const proved = tightened.data?.passed ? tightened.data : null;
@@ -311,7 +313,7 @@ export function Verdict({ crypt }: { crypt: Crypt }) {
         {report && view !== null && (
           <>
             <section className="mt-6" aria-labelledby="verdict-title">
-              <h3 id="verdict-title" className="text-xl font-semibold">Readiness verdict</h3>
+              <h3 id="verdict-title" ref={headingRef} tabIndex={-1} className="text-xl font-semibold">Readiness verdict</h3>
               <p className={`mt-2 inline-block rounded-md border-2 px-4 py-2 ${VERDICT_STYLE[view.verdict.value]}`}>
                 <span className="text-3xl font-bold">{view.verdict.value}</span>{" "}
                 <span className="text-sm" data-testid="verdict-artifact">

@@ -57,6 +57,21 @@ def _post(client: TestClient, path: str, **body: object) -> object:
     return client.post(f"/v1/{path}", json={"config": CONFIG, **body})
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [("", 10), ("abc", 10), ("0", 10), ("-5", 10), ("100001", 10), ("1", 1), ("10000", 10000)],
+)
+def test_rate_limit_override_is_read_from_the_environment_and_bounded(
+    monkeypatch: pytest.MonkeyPatch, raw: str, expected: int
+) -> None:
+    from api.main import _rate_from_env
+
+    monkeypatch.setenv("NECRO_RATE_PER_MINUTE", raw)
+    assert _rate_from_env() == expected
+    monkeypatch.delenv("NECRO_RATE_PER_MINUTE")
+    assert _rate_from_env() == 10
+
+
 def test_healthz_reports_version_and_commit(client: TestClient) -> None:
     response = client.get("/healthz")
     assert response.status_code == 200

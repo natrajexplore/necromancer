@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import { useExhume, type Crypt } from "../api/hooks";
 import type { ExhumeResult } from "../api/types";
@@ -74,6 +74,12 @@ const STAGES: { id: Stage; label: string; plain: string }[] = [
 export function CryptDetails({ crypt }: { crypt: Crypt }) {
   const [stage, setStage] = useState<Stage>("exhume");
   const headingId = useId();
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // Opening a crypt and changing stage both land on the new heading, so keyboard and screen
+  // reader users start at the top of what they chose.
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [stage]);
   return (
     <div className="mt-10">
       <nav aria-label="Stages of the ritual">
@@ -94,10 +100,10 @@ export function CryptDetails({ crypt }: { crypt: Crypt }) {
         </ol>
       </nav>
       {stage === "exhume" ? (
-        <ExhumeStage crypt={crypt} />
+        <ExhumeStage crypt={crypt} headingRef={headingRef} />
       ) : (
         <section aria-labelledby={headingId} className="mt-4 rounded-lg border border-stone bg-crypt p-6">
-          <h2 id={headingId} className="font-display text-2xl text-bone">
+          <h2 id={headingId} ref={headingRef} tabIndex={-1} className="font-display text-2xl text-bone">
             {crypt.name}: {STAGES.find((entry) => entry.id === stage)?.label}
           </h2>
           <div className="mt-4">
@@ -113,12 +119,12 @@ export function CryptDetails({ crypt }: { crypt: Crypt }) {
 }
 
 /** What exhume found in one crypt: the summary, then every unquiet line. */
-function ExhumeStage({ crypt }: { crypt: Crypt }) {
+function ExhumeStage({ crypt, headingRef }: { crypt: Crypt; headingRef: RefObject<HTMLHeadingElement> }) {
   const headingId = useId();
   const exhumed = useExhume(crypt);
   return (
     <section aria-labelledby={headingId} className="mt-4 rounded-lg border border-stone bg-crypt p-6">
-      <h2 id={headingId} className="font-display text-2xl text-bone">
+      <h2 id={headingId} ref={headingRef} tabIndex={-1} className="font-display text-2xl text-bone">
         {crypt.name}
       </h2>
       <div className="mt-4" aria-live="polite">

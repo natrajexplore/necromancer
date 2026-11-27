@@ -29,11 +29,11 @@ describe("Graveyard", () => {
     renderApp();
     for (const crypt of SAMPLES) {
       const { sample: entry } = crypt;
-      const tombstone = screen.getByRole("button", { name: new RegExp(`^${crypt.name}:`) });
+      const tombstone = screen.getByRole("button", { name: new RegExp(`^${crypt.name} `) });
       expect(tombstone).toHaveTextContent(entry.os_version);
       expect(tombstone).toHaveTextContent(`${entry.rules} rules`);
       expect(tombstone).toHaveTextContent(`died ${entry.died}`);
-      expect(tombstone).toHaveAccessibleName(expect.stringContaining("fictional year"));
+      expect(tombstone).toHaveAccessibleDescription(expect.stringContaining("fictional year"));
     }
     expect(screen.getByRole("heading", { name: "Exhume your own" })).toBeInTheDocument();
   });
@@ -49,7 +49,7 @@ describe("Graveyard", () => {
   it("exhumes a sample on click and lists its unquiet lines in plain sight", async () => {
     const fetchMock = mockApi({ ...HEALTH, "/v1/exhume": () => json(exhumeResult()) });
     const user = renderApp();
-    await user.click(screen.getByRole("button", { name: /^asa-9\.8-dc:/ }));
+    await user.click(screen.getByRole("button", { name: /^asa-9\.8-dc / }));
 
     const details = await screen.findByRole("region", { name: "asa-9.8-dc" });
     await within(details).findByText("Cisco ASA 9.8(4)");
@@ -74,7 +74,7 @@ describe("Graveyard", () => {
   it("explains the themed label in plain English, on hover and for screen readers", async () => {
     mockApi({ ...HEALTH, "/v1/exhume": () => json(exhumeResult()) });
     const user = renderApp();
-    await user.click(screen.getByRole("button", { name: /^asa-9\.8-dc:/ }));
+    await user.click(screen.getByRole("button", { name: /^asa-9\.8-dc / }));
     const label = await screen.findByText("Unquiet lines");
     expect(label).toHaveAccessibleDescription(expect.stringContaining("blocks the readiness verdict"));
     expect(label).toHaveAttribute("tabindex", "0");
@@ -83,7 +83,7 @@ describe("Graveyard", () => {
   it("opens a tombstone from the keyboard", async () => {
     mockApi({ ...HEALTH, "/v1/exhume": () => json(exhumeResult()) });
     const user = renderApp();
-    const tombstone = screen.getByRole("button", { name: /^asa-9\.8-dc:/ });
+    const tombstone = screen.getByRole("button", { name: /^asa-9\.8-dc / });
     tombstone.focus();
     await user.keyboard("{Enter}");
     expect(tombstone).toHaveAttribute("aria-pressed", "true");
@@ -99,7 +99,7 @@ describe("Graveyard", () => {
     await user.type(screen.getByLabelText("Or paste a config"), "version 12.4{enter}hostname tomb-edge-r1");
     await user.click(screen.getByRole("button", { name: "Exhume" }));
 
-    const tombstone = await screen.findByRole("button", { name: /^Pasted config 1:/ });
+    const tombstone = await screen.findByRole("button", { name: /^Pasted config 1 / });
     expect(tombstone).toHaveTextContent("Cisco IOS 12.4");
     expect(tombstone).toHaveTextContent("confidence 0.85");
     expect(tombstone).toHaveTextContent("coverage 51.4%");
@@ -120,7 +120,7 @@ describe("Graveyard", () => {
     await user.type(screen.getByLabelText("Or paste a config"), "PIX Version 6.3(5)");
     await user.click(screen.getByRole("button", { name: "Exhume" }));
 
-    const tombstone = await screen.findByRole("button", { name: /^Pasted config 1:/ });
+    const tombstone = await screen.findByRole("button", { name: /^Pasted config 1 / });
     expect(tombstone).toHaveTextContent("confidence 0.89");
     expect(tombstone).not.toHaveTextContent("0.90");
     const details = await screen.findByRole("region", { name: "Pasted config 1" });
@@ -148,7 +148,7 @@ describe("Graveyard", () => {
     const user = renderApp();
     const file = new File(["PIX Version 6.3(5)\n"], "branch-pix.cfg", { type: "text/plain" });
     await user.upload(screen.getByLabelText("choose a file"), file);
-    expect(await screen.findByRole("button", { name: /^branch-pix\.cfg:/ })).toHaveTextContent("Cisco PIX 6.3(5)");
+    expect(await screen.findByRole("button", { name: /^branch-pix\.cfg / })).toHaveTextContent("Cisco PIX 6.3(5)");
   });
 
   it("refuses a file over 2 MB without sending it", async () => {
