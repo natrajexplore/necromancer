@@ -43,7 +43,7 @@
 .EXAMPLE
   .\deploy.ps1 -AlertEmail <your-address>
 #>
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding = $false)]  # a mistyped switch must fail, not become -StackName
 param(
     [Parameter(Mandatory = $true)][string]$AlertEmail,
     [string]$StackName = 'necromancer',
@@ -109,9 +109,9 @@ function Build-Ui {
     Write-Host '== Building the UI'
     Remove-Item Env:VITE_API_BASE -ErrorAction SilentlyContinue  # same origin: the UI and the API share one host
     if (-not (Test-Path (Join-Path $Root 'frontend\node_modules'))) {
-        Invoke-Native 'npm.cmd' @('--prefix', 'frontend', 'ci')
+        Invoke-Native 'npm.cmd' @('--prefix', 'frontend', 'ci') | Out-Host  # keep npm output out of the return value
     }
-    Invoke-Native 'npm.cmd' @('--prefix', 'frontend', 'run', 'build')
+    Invoke-Native 'npm.cmd' @('--prefix', 'frontend', 'run', 'build') | Out-Host
     $built = Join-Path $Root 'frontend\dist'
     if (-not (Test-Path (Join-Path $built 'index.html'))) { throw 'frontend\dist\index.html is missing after the build' }
     return $built
