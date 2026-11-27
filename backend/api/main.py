@@ -16,6 +16,7 @@ from mangum import Mangum
 
 from api.errors import install_error_handlers
 from api.middleware import GuardMiddleware, RateLimiter
+from api.static import install_static
 from necro import service
 from necro.assessment import Assessment
 from necro.audit import DEFAULT_INPUT_NAME
@@ -145,7 +146,12 @@ def build_v1() -> APIRouter:
     return router
 
 
-def create_app(*, rate_per_minute: int = RATE_PER_MINUTE, ui_origin: str | None = None) -> FastAPI:
+def create_app(
+    *,
+    rate_per_minute: int = RATE_PER_MINUTE,
+    ui_origin: str | None = None,
+    static_dir: str | None = None,
+) -> FastAPI:
     app = FastAPI(
         title="NECROMANCER",
         version=__version__,
@@ -159,6 +165,11 @@ def create_app(*, rate_per_minute: int = RATE_PER_MINUTE, ui_origin: str | None 
     @app.get("/healthz")
     def healthz() -> dict[str, Any]:
         return {"status": "ok", "version": __version__, "commit": git_commit()}
+
+    # No-CDN deployments serve the built UI here, after every API route (see api/static.py).
+    ui_dir = static_dir if static_dir is not None else os.environ.get("NECRO_STATIC_DIR")
+    if ui_dir:
+        install_static(app, ui_dir)
 
     # Middleware added later is outermost. The guard is last, so that every response, including
     # CORS preflights and rate-limit refusals, carries the security headers and a request id.

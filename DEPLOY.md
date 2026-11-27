@@ -23,7 +23,7 @@ Use an IAM user or role that can manage CloudFormation, Lambda, API Gateway, S3,
 .\deploy.ps1 -AlertEmail <your-address>
 ```
 
-Optional: `-StackName`, `-Region`, `-Profile`, `-Yes` (skip the change-set prompt), `-SkipTests`.
+Optional: `-StackName`, `-Region`, `-Profile`, `-Yes` (skip the change-set prompt), `-SkipTests`, `-NoCdn` (see below).
 
 The script runs these steps and stops at the first failure:
 
@@ -44,6 +44,35 @@ curl.exe https://<distribution-domain>/healthz
 
 It returns the version and commit.
 
+## Fallback without CloudFront (`-NoCdn`)
+
+A new AWS account can be blocked from creating CloudFront distributions until AWS verifies it. Use this mode meanwhile:
+
+```powershell
+.\deploy.ps1 -AlertEmail <your-address> -NoCdn
+```
+
+It sets the template parameter `EnableCdn=false`. Then:
+
+- The UI bucket, its policy, the origin access control, the distribution and both response headers policies are **not created**.
+  The budget alarm, Lambda and HTTP API are unchanged.
+- The script builds the UI first and copies `frontend/dist` to `build/lambda-src/static`, which ships inside the Lambda package.
+  It skips the S3 sync and the CloudFront invalidation.
+- The stack sets `NECRO_STATIC_DIR=/var/task/static` and adds the routes `GET /` and `GET /{proxy+}` to the HTTP API.
+  `api/static.py` serves the files after every `/v1` and `/healthz` route. Unknown GET paths return `index.html`
+  (SPA fallback). A missing `/assets/*` file, an unknown `/v1/*` path and `/healthz/*` stay JSON 404s.
+- The app adds the CloudFront policy headers itself on every response: CSP, `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: no-referrer` and `X-Frame-Options: DENY`. The UI gets the same CSP as the CloudFront UI policy; API responses get the strict one.
+- `SiteUrl` and `HealthUrl` point at the HTTP API endpoint. `UiBucketName` and `DistributionId` are not output.
+
+The UI and the API share one origin in this mode too, so the UI needs no API URL and no CORS.
+Differences from the CDN mode: no edge caching, and every UI request invokes the Lambda (a cold start can add a second or two to the first page load).
+The 2 requests/s API throttle also applies to UI requests, so a page load with many assets can briefly return 429.
+
+To move to CloudFront later, deploy again without `-NoCdn`. CloudFormation creates the CDN resources and removes the static routes.
+The `static` directory is no longer staged, so `NECRO_STATIC_DIR` is unset.
+To try it locally, set `NECRO_STATIC_DIR` to the path of `frontend/dist` and run `uv run python -m uvicorn api.main:app` from `backend/`.
+
 ## Validate the template without AWS
 
 ```powershell
@@ -52,11 +81,11 @@ $env:AWS_DEFAULT_REGION = '<any-region>'; sam validate --lint
 
 ## Limits and known gaps
 
-- **Per-IP rate limit.** HTTP APIs cannot throttle per client. API Gateway throttles the whole API; the 10 POSTs/minute/IP limit
+- **Per-IP rate limit (CDN mode).** HTTP APIs cannot throttle per client. API Gateway throttles the whole API; the 10 POSTs/minute/IP limit
   is enforced by `api/middleware.py` in each warm Lambda instance. Behind CloudFront that limiter sees CloudFront edge addresses, not
   visitors, because it reads the socket peer. Reading `X-Forwarded-For` in the backend would fix that and needs a code change.
 - **Timeout.** A request that needs more than 28 s (for example a proof at a very large example budget) fails with a gateway error.
-- **Direct API URL.** The `ApiEndpoint` output bypasses CloudFront. It has the same throttling and the app's own security headers.
+- **Direct API URL.** With CloudFront, the `ApiEndpoint` output bypasses it. It has the same throttling and the app's own security headers.
 - **CSP.** The UI policy allows inline styles because the print-ready report opens as a `blob:` page that inherits it.
 - **Cost.** All services used are in the free tier at demo traffic. CloudFront uses `PriceClass_100`. The budget alarm warns; it does not stop spending.
 

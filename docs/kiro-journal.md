@@ -197,3 +197,29 @@
 - What Kiro did: Checked AWS CLI state (v2.42.2, nothing configured) and gave `aws configure` steps without handling credentials.
 - What the human corrected: Nothing yet.
 - Kiro feature used: hooks
+
+## 2026-11-27 — CLI
+- Spec task(s): none (vibe)
+- What Kiro did: Added template.yaml (HTTP API, Lambda, S3 + CloudFront, USD 1 budget), deploy.ps1 and DEPLOY.md; validated with sam validate --lint and a local sam build; pushed bcf7bd7 without deploying.
+- What the human corrected: The human set the scope (no deploy, no hardcoded account, region or e-mail, no BOM); Kiro flagged the per-IP limiter seeing CloudFront edge IPs.
+- Kiro feature used: hooks, steering
+
+## 2026-11-27 � CLI
+- Spec task(s): none (vibe)
+- What Kiro did: Declined to run interactive 'aws configure' and explained the manual steps and profile setup.
+- What the human corrected: nothing yet
+- Kiro feature used: steering
+
+
+## 2026-11-27 — CLI
+- Spec task(s): none (vibe)
+- What Kiro did: Ran 'aws sts get-caller-identity'; it failed with NoCredentials, so told the user to configure credentials.
+- What the human corrected: nothing
+- Kiro feature used: steering
+
+
+## 2026-11-27 — CLI
+- Spec task(s): none (vibe)
+- What Kiro did: Added the EnableCdn fallback: conditional CloudFront resources in template.yaml, API-served UI with SPA fallback and security headers (api/static.py), deploy.ps1 -NoCdn, DEPLOY.md section, tests; sam validate --lint and the full suite pass.
+- What the human corrected: The human asked for the fallback because CloudFront is blocked until AWS verifies the account.
+- Kiro feature used: steering, hooks

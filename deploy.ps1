@@ -8,6 +8,11 @@
   3. npm.cmd --prefix frontend run build (the UI calls /v1 and /healthz on its own origin).
   4. aws s3 cp/sync of frontend\dist into the private UI bucket, then a CloudFront invalidation.
 
+  With -NoCdn (fallback while CloudFront is unavailable on the account) the order changes: the UI is built
+  first, frontend\dist is copied into build\lambda-src\static, the stack is deployed with EnableCdn=false
+  (no bucket, distribution or headers policies), and the Lambda serves the UI from the HTTP API endpoint.
+  Steps 3 and 4 (S3 sync, invalidation) are skipped.
+
   Nothing here is hardcoded to an account, region or e-mail address. The region comes from -Region,
   AWS_REGION / AWS_DEFAULT_REGION, or `aws configure`. Credentials come from the usual AWS CLI chain.
   Python tools run as modules (python -m) and npm as npm.cmd, because Smart App Control blocks
@@ -28,6 +33,10 @@
 .PARAMETER Yes
   Apply the change set without the confirmation prompt.
 
+.PARAMETER NoCdn
+  Deploy without S3 and CloudFront. The function serves the built UI itself at the API endpoint.
+  Redeploy without -NoCdn once CloudFront is available (the stack then creates the CDN resources).
+
 .PARAMETER SkipTests
   Skip the backend API tests that run before the build.
 
@@ -41,6 +50,7 @@ param(
     [string]$Region,
     [string]$Profile,
     [switch]$Yes,
+    [switch]$NoCdn,
     [switch]$SkipTests
 )
 
@@ -95,11 +105,27 @@ $awsArgs = @('--region', $Region) + $profileArgs
 Write-Host '== Checking credentials (read-only)'
 Invoke-Native 'aws' (@('sts', 'get-caller-identity', '--query', 'Arn', '--output', 'text') + $awsArgs)
 
+function Build-Ui {
+    Write-Host '== Building the UI'
+    Remove-Item Env:VITE_API_BASE -ErrorAction SilentlyContinue  # same origin: the UI and the API share one host
+    if (-not (Test-Path (Join-Path $Root 'frontend\node_modules'))) {
+        Invoke-Native 'npm.cmd' @('--prefix', 'frontend', 'ci')
+    }
+    Invoke-Native 'npm.cmd' @('--prefix', 'frontend', 'run', 'build')
+    $built = Join-Path $Root 'frontend\dist'
+    if (-not (Test-Path (Join-Path $built 'index.html'))) { throw 'frontend\dist\index.html is missing after the build' }
+    return $built
+}
+
 # ---- 0. Backend tests ----------------------------------------------------------------------------
 if (-not $SkipTests) {
     Write-Host '== Backend API tests'
     Invoke-Native 'uv' @('run', 'python', '-m', 'pytest', '-q', '-x', 'tests/test_api.py') (Join-Path $Root 'backend')
 }
+
+# -NoCdn: the UI is built first because it ships inside the Lambda package.
+$dist = $null
+if ($NoCdn) { $dist = Build-Ui }
 
 # ---- 1. Stage the Lambda sources -----------------------------------------------------------------
 Write-Host '== Staging Lambda sources'
@@ -110,6 +136,10 @@ foreach ($package in 'api', 'necro') {
 }
 Copy-Item -Recurse -Path (Join-Path $Root 'samples') -Destination (Join-Path $Stage 'samples')
 @(Get-ChildItem -Path $Stage -Recurse -Directory -Filter '__pycache__') | Remove-Item -Recurse -Force
+if ($NoCdn) {
+    # The app serves this directory when NECRO_STATIC_DIR is set (template.yaml sets it when EnableCdn=false).
+    Copy-Item -Recurse -Path $dist -Destination (Join-Path $Stage 'static')
+}
 # Pinned by uv.lock. The MCP server and uvicorn are dev-box tools, so they and their dependencies are left out.
 Invoke-Native 'uv' @(
     'export', '--frozen', '--no-dev', '--no-emit-project', '--no-hashes',
@@ -132,7 +162,7 @@ $deployArgs = @(
     '--resolve-s3',
     '--capabilities', 'CAPABILITY_IAM',
     '--no-fail-on-empty-changeset',
-    '--parameter-overrides', "AlertEmail=$AlertEmail", "GitCommit=$commit"
+    '--parameter-overrides', "AlertEmail=$AlertEmail", "GitCommit=$commit", "EnableCdn=$(if ($NoCdn) { 'false' } else { 'true' })"
 )
 if ($Yes) { $deployArgs += '--no-confirm-changeset' } else { $deployArgs += '--confirm-changeset' }
 Invoke-Native 'sam' ($deployArgs + $awsArgs)
@@ -141,55 +171,53 @@ $json = Get-NativeOutput 'aws' (@('cloudformation', 'describe-stacks', '--stack-
         '--query', 'Stacks[0].Outputs', '--output', 'json') + $awsArgs)
 $outputs = @{}
 foreach ($item in ($json | ConvertFrom-Json)) { $outputs[$item.OutputKey] = $item.OutputValue }
-foreach ($key in 'UiBucketName', 'DistributionId', 'SiteUrl') {
+$required = @('SiteUrl')
+if (-not $NoCdn) { $required += @('UiBucketName', 'DistributionId') }
+foreach ($key in $required) {
     if (-not $outputs.ContainsKey($key)) { throw "Stack output missing: $key" }
 }
 
 # ---- 3. Build the UI -----------------------------------------------------------------------------
-Write-Host '== Building the UI'
-Remove-Item Env:VITE_API_BASE -ErrorAction SilentlyContinue  # same origin: CloudFront routes /v1 and /healthz
-if (-not (Test-Path (Join-Path $Root 'frontend\node_modules'))) {
-    Invoke-Native 'npm.cmd' @('--prefix', 'frontend', 'ci')
-}
-Invoke-Native 'npm.cmd' @('--prefix', 'frontend', 'run', 'build')
-$dist = Join-Path $Root 'frontend\dist'
-if (-not (Test-Path (Join-Path $dist 'index.html'))) { throw 'frontend\dist\index.html is missing after the build' }
+if (-not $NoCdn) { $dist = Build-Ui }
 
-# ---- 4. Upload and invalidate --------------------------------------------------------------------
-# Content types are set explicitly: on Windows the AWS CLI reads them from the registry, which can
-# label .js as text/plain, and the UI's nosniff header would then stop the script from running.
-Write-Host '== Uploading the UI'
-$bucket = "s3://$($outputs['UiBucketName'])"
-$immutable = 'public, max-age=31536000, immutable'  # Vite hashes the file names under assets/
-$types = @(
-    @('*.html', 'text/html; charset=utf-8'),
-    @('*.js', 'text/javascript'),
-    @('*.css', 'text/css'),
-    @('*.woff2', 'font/woff2'),
-    @('*.woff', 'font/woff'),
-    @('*.svg', 'image/svg+xml'),
-    @('*.json', 'application/json'),
-    @('*.txt', 'text/plain; charset=utf-8')
-)
-foreach ($entry in $types) {
-    $pattern = $entry[0]
-    $type = $entry[1]
-    Invoke-Native 'aws' (@('s3', 'cp', $dist, $bucket, '--recursive', '--only-show-errors',
-            '--exclude', '*', '--include', "assets/$pattern",
-            '--content-type', $type, '--cache-control', $immutable) + $awsArgs)
-    Invoke-Native 'aws' (@('s3', 'cp', $dist, $bucket, '--recursive', '--only-show-errors',
-            '--exclude', '*', '--include', $pattern, '--exclude', 'assets/*',
-            '--content-type', $type, '--cache-control', 'no-cache') + $awsArgs)
-}
-# Anything left over (other file types) is uploaded here, and files removed from the build are deleted.
-Invoke-Native 'aws' (@('s3', 'sync', $dist, $bucket, '--delete', '--only-show-errors',
-        '--cache-control', 'no-cache') + $awsArgs)
+if (-not $NoCdn) {
+    # ---- 4. Upload and invalidate (skipped with -NoCdn) --------------------------------------------------------------------
+    # Content types are set explicitly: on Windows the AWS CLI reads them from the registry, which can
+    # label .js as text/plain, and the UI's nosniff header would then stop the script from running.
+    Write-Host '== Uploading the UI'
+    $bucket = "s3://$($outputs['UiBucketName'])"
+    $immutable = 'public, max-age=31536000, immutable'  # Vite hashes the file names under assets/
+    $types = @(
+        @('*.html', 'text/html; charset=utf-8'),
+        @('*.js', 'text/javascript'),
+        @('*.css', 'text/css'),
+        @('*.woff2', 'font/woff2'),
+        @('*.woff', 'font/woff'),
+        @('*.svg', 'image/svg+xml'),
+        @('*.json', 'application/json'),
+        @('*.txt', 'text/plain; charset=utf-8')
+    )
+    foreach ($entry in $types) {
+        $pattern = $entry[0]
+        $type = $entry[1]
+        Invoke-Native 'aws' (@('s3', 'cp', $dist, $bucket, '--recursive', '--only-show-errors',
+                '--exclude', '*', '--include', "assets/$pattern",
+                '--content-type', $type, '--cache-control', $immutable) + $awsArgs)
+        Invoke-Native 'aws' (@('s3', 'cp', $dist, $bucket, '--recursive', '--only-show-errors',
+                '--exclude', '*', '--include', $pattern, '--exclude', 'assets/*',
+                '--content-type', $type, '--cache-control', 'no-cache') + $awsArgs)
+    }
+    # Anything left over (other file types) is uploaded here, and files removed from the build are deleted.
+    Invoke-Native 'aws' (@('s3', 'sync', $dist, $bucket, '--delete', '--only-show-errors',
+            '--cache-control', 'no-cache') + $awsArgs)
 
-Write-Host '== Invalidating CloudFront'
-Invoke-Native 'aws' (@('cloudfront', 'create-invalidation', '--distribution-id', $outputs['DistributionId'],
-        '--paths', '/*', '--query', 'Invalidation.Status', '--output', 'text') + $awsArgs)
+    Write-Host '== Invalidating CloudFront'
+    Invoke-Native 'aws' (@('cloudfront', 'create-invalidation', '--distribution-id', $outputs['DistributionId'],
+            '--paths', '/*', '--query', 'Invalidation.Status', '--output', 'text') + $awsArgs)
+}
 
 Write-Host ''
 Write-Host "UI:     $($outputs['SiteUrl'])"
 Write-Host "Health: $($outputs['SiteUrl'])/healthz"
+if ($NoCdn) { Write-Host 'No-CDN mode: the Lambda serves the UI. Redeploy without -NoCdn once CloudFront is available.' }
 Write-Host 'Confirm the budget alert subscription from the e-mail AWS sends to the AlertEmail address.'

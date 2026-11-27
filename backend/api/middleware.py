@@ -31,7 +31,11 @@ SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+    "Strict-Transport-Security": "max-age=31536000",
 }
+# A response that already chose its own policy (the static UI) keeps it.
+KEEP_IF_SET = {"Content-Security-Policy"}
 
 
 class RateLimiter:
@@ -58,6 +62,8 @@ class RateLimiter:
 
 def _with_headers(response: Response, request_id: str) -> Response:
     for name, value in SECURITY_HEADERS.items():
+        if name in KEEP_IF_SET and name in response.headers:
+            continue
         response.headers[name] = value
     response.headers["X-Request-ID"] = request_id
     return response
