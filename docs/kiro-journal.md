@@ -241,3 +241,9 @@
 - What Kiro did: Added axe, keyboard, focus and reduced-motion checks and Playwright smoke tests (ritual, haunted path) under frontend/e2e. Fixed tombstone names, moved focus after each step, added a favicon and robots.txt. Lighthouse desktop 100/100/100/100. Recorded in docs/a11y-lighthouse.md.
 - What the human corrected: The human asked for role and label locators, chromium only, no ci.yml edit, and the journal committed first.
 - Kiro feature used: specs, steering, hooks
+
+## 2026-11-28 — CLI
+- Spec task(s): graveyard-ui/8, graveyard-ui/9
+- What Kiro did: Verified the final state (tsc, 124 vitest, 9 e2e, ruff, mypy, check_repo) and pushed bbd9009 to main.
+- What the human corrected: nothing further
+- Kiro feature used: specs, hooks
