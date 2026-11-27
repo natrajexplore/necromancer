@@ -33,8 +33,8 @@ Open the demo and use the bundled sample `pix-2006-hq`:
 The baseline verdict never changes because of the tightening. Both verdicts are in the report, and the tightened one is
 marked as a separate change.
 
-The deployed build is the one `/healthz` reports (commit `509b3a6` when this was written). The latest commits are in this
-repository and are not deployed yet.
+The deployed build is the one `/healthz` reports: commit `068eb90` (checked on 2026-11-27). Its application code is
+identical to the repository's latest commit; the commits after it change documentation only.
 
 ## What is built
 
@@ -245,9 +245,9 @@ The application was built with **Kiro CLI**, spec first. Counts below come from 
 
 | Kiro feature | Use in this project |
 |---|---|
-| Specs | 3 specs ([`necro-engine`](.kiro/specs/necro-engine), [`migration-governance`](.kiro/specs/migration-governance), [`graveyard-ui`](.kiro/specs/graveyard-ui)) with 126 acceptance criteria. 59 of 66 task boxes are ticked: necro-engine 40 of 46, migration-governance 10 of 11, graveyard-ui 9 of 9. The open ones are Phase 2 work and two optional stretch tasks. 53 of the 91 commits carry a `kiro-task` trailer |
+| Specs | 3 specs ([`necro-engine`](.kiro/specs/necro-engine), [`migration-governance`](.kiro/specs/migration-governance), [`graveyard-ui`](.kiro/specs/graveyard-ui)) with 126 acceptance criteria. 59 of 66 task boxes are ticked: necro-engine 40 of 46, migration-governance 10 of 11, graveyard-ui 9 of 9. The open ones are Phase 2 work and two optional stretch tasks. 53 of the 93 commits carry a `kiro-task` trailer |
 | Steering | 8 documents in 3 inclusion modes: always (product, tech, structure, security), fileMatch (policy-semantics, migration-governance, haunted-ui) and manual (pbt-playbook) |
-| Hooks | 6: proof of life on save, ghost-rule guard, readiness-gate guard, secret exorcist before writes, spec traceability, and a journal entry at the end of each session (42 entries in [`docs/kiro-journal.md`](docs/kiro-journal.md)) |
+| Hooks | 6: proof of life on save, ghost-rule guard, readiness-gate guard, secret exorcist before writes, spec traceability, and a journal entry at the end of each session (43 entries in [`docs/kiro-journal.md`](docs/kiro-journal.md)) |
 | Custom agents | 5 with scoped tools: `ghoul-parser`, `autopsy-surgeon`, `necromancer`, `oracle`, `gatekeeper`. The journal records `gatekeeper` in two sessions. The others are defined but not recorded as used |
 | MCP | The project's own server (`backend/mcp_server.py`, five tools) registered in `.kiro/settings/mcp.json`, plus `fetch` |
 | Property-based testing | Properties and the mutation suite were written in Kiro sessions and are run by a hook and by CI |
@@ -333,7 +333,7 @@ docs/                   evidence, accessibility notes, planning documents, Kiro 
 - [x] graveyard-ui: graveyard, autopsy, resurrection, proof, verdict, accessibility pass, Playwright and axe tests
 - [x] Hosted demo (API Gateway HTTP API and Lambda)
 - [x] Separate verdict for the tightened artifact
-- [ ] Redeploy the demo from the latest commit
+- [x] Redeploy the demo from the latest commit (live build `068eb90`, same application code as `main`)
 - [ ] Deploy the CloudFront and S3 mode (`EnableCdn=true`, blocked until the AWS account is verified)
 - [ ] Phase 2: ASA 8.3 to 9.x (object NAT, global ACL), PAN-OS NAT rule emission, time-range schedule objects
 - [ ] Phase 2: hit-count import, PDF and CSV export

@@ -1,6 +1,6 @@
 # How we used Kiro
 
-This write-up is built from [`kiro-journal.md`](kiro-journal.md) (42 entries, one per session, appended at the end of
+This write-up is built from [`kiro-journal.md`](kiro-journal.md) (43 entries, one per session, appended at the end of
 each session by a Kiro hook), the git history, and the numbers in [`evidence.md`](evidence.md). Commit hashes can be
 checked with `git show <hash>`. Where Kiro got something wrong, or the human had to step in, it says so.
 
@@ -15,7 +15,7 @@ Only Kiro CLI is claimed. Kiro Crew, Kiro Web, Powers and a vibe-coded compariso
 - 59 of the 66 task boxes are ticked (necro-engine 40 of 46, migration-governance 10 of 11, graveyard-ui 9 of 9). The
   open ones are Phase 2 work (ASA 8.3+, time-range schedule objects, hit counts, NAT rule emission, PDF and CSV export)
   and two optional stretch tasks.
-- Each task was run in Kiro and committed with a `kiro-task: <spec>/<task>` trailer: 53 of the 91 commits at the time of
+- Each task was run in Kiro and committed with a `kiro-task: <spec>/<task>` trailer: 53 of the 93 commits at the time of
   measuring (`git log --grep="kiro-task" --oneline`).
 - **Spec first, in practice.** When gating the tightened artifact turned out to be missing, the requirements
   (necro-engine 5.5 and 5.6, governance 1.8, 2.5, 4.8, 6.3 and 6.4) and the tasks were written first in the session, then
@@ -53,7 +53,7 @@ Section 1.4 drove `ddc0999` (outbound ACL implicit deny).
 | spec-traceability | PostFileSave on `requirements.md` | Asks for orphaned criteria and tasks |
 | kiro-journal-on-stop | Stop | Appends one entry to `docs/kiro-journal.md` |
 
-What the evidence shows: the journal hook wrote the 42 entries this document is built from, and the secret-exorcist
+What the evidence shows: the journal hook wrote the 43 entries this document is built from, and the secret-exorcist
 hook fired before file writes throughout the later sessions. We have no record of a secret that a hook stopped. The
 redaction leaks that were fixed (`ef524bc`, `1dc597c`) were found by tests, by parsing a sample, and by review.
 
@@ -98,7 +98,7 @@ interactive (journal, 2026-11-24). Most of the work ran in the default agent.
 | Surface | Used | Notes |
 |---|---|---|
 | Kiro CLI | Yes, for everything | Specs, hooks, steering, custom agents and MCP all ran from it |
-| Kiro IDE | Not claimed | TODO(owner): two journal entries are labelled `IDE` by the journal hook (2026-11-24 `necro-engine/7`, 2026-11-27 redaction fix). Confirm or relabel |
+| Kiro IDE | No | |
 | Kiro Web | No | |
 | Kiro Crew | No | [`crew/`](../crew/README.md) is a design |
 

@@ -72,7 +72,7 @@
 - What the human corrected: Nothing; the request repeated finished work.
 - Kiro feature used: specs, hooks
 
-## 2026-11-24 — IDE
+## 2026-11-24 — CLI
 - Spec task(s): necro-engine/7
 - What Kiro did: Added tighten.py and tighten_regions.py (remediations, ledger with approvals, separate tightened artifact) and PBT P6; all gates green at 98% coverage.
 - What the human corrected: Nothing; Kiro corrected its own tasks.md encoding damage in a follow-up commit.
@@ -246,7 +246,7 @@
 - What the human corrected: nothing further
 - Kiro feature used: specs, hooks
 
-## 2026-11-27 — IDE
+## 2026-11-27 — CLI
 - Spec task(s): none (vibe)
 - What Kiro did: Closed secret leaks in redact.py (type digits, aaa key, username attributes, isakmp, ftp, ppp, ikev1 psk), added a generic fallback and an API+CLI Hypothesis leak property, pushed 1dc597c.
 - What the human corrected: nothing yet; the human specified each leaking form up front.

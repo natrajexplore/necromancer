@@ -32,7 +32,7 @@ It is live: https://7bs6otuwci.execute-api.ap-southeast-2.amazonaws.com
 
 Spec first, with Kiro CLI.
 
-- 3 specs with 126 acceptance criteria. 59 of 66 task boxes are ticked, and the open ones are Phase 2 work and two optional stretch tasks. 53 of 91 commits carry a `kiro-task` trailer.
+- 3 specs with 126 acceptance criteria. 59 of 66 task boxes are ticked, and the open ones are Phase 2 work and two optional stretch tasks. 53 of 93 commits carry a `kiro-task` trailer.
 - 8 steering documents in 3 inclusion modes, 6 hooks, 5 custom agents and the project's own MCP server (five tools).
 - Python 3.12, FastAPI, pydantic and Hypothesis on the backend. React 18, Vite and Tailwind CSS on the frontend. Playwright and axe-core for end-to-end and accessibility tests.
 - AWS: one Lambda behind an API Gateway HTTP API serves the UI and the API. A CloudFront and S3 mode exists in the template and is not active.

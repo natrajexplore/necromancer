@@ -4,7 +4,8 @@ Every number in the README and the Devpost text comes from a command in this fil
 command as it was run and what it printed.
 
 - **Measured on:** 2026-11-27, at commit `7eb6f08` (the commit that was checked out when the commands ran).
-  Counts that depend on git history (commits, `kiro-task` commits) grow as commits are added.
+  Counts that depend on git history (commits, `kiro-task` commits) grow as commits are added; the rows that give them
+  name the commit they were counted at.
 - **Machine:** Windows 11 (10.0.26300), Python 3.12.10, uv 0.13.7, Node v26.13.0, npm 11.20.0, Playwright 1.65.1,
   Google Chrome (for Lighthouse).
 - **Shell:** Windows PowerShell. On Linux, replace `$env:NAME='x'` with `NAME=x` and `..\` with `../`.
@@ -85,7 +86,8 @@ disabled and fails on any serious or critical violation. Details are in [a11y-li
 | Acceptance criteria per spec | `foreach($s in 'necro-engine','migration-governance','graveyard-ui'){ "$s " + (Get-Content ".kiro/specs/$s/requirements.md" \| Select-String '^\d+\.\d+\s').Count }` | necro-engine 73, migration-governance 33, graveyard-ui 20: **126** |
 | Task boxes ticked per spec | `(Get-Content ".kiro/specs/$s/tasks.md" \| Select-String '^\s*- \[x\]').Count` for each spec | necro-engine 40 ticked, 6 open (Phase 2 tasks 10 to 13 and the two optional stretch tasks 14 and 15); migration-governance 10 ticked, 1 open (task 10, PDF and CSV export, Phase 2); graveyard-ui 9 ticked, 0 open |
 | Spec traceability | `python -I .github/scripts/check_repo.py` | every check ok: `.kiro` JSON, `.kiro` not ignored, spec traceability, sample annotations, synthetic IPs, 58 golden flows in 4 files |
-| Commits with a `kiro-task` trailer | `git log --grep="kiro-task" --oneline \| Measure-Object` | **53** of 91 commits |
+| Commits in total | `git rev-list --count HEAD` | **93**, at `b6ece18` |
+| Commits with a `kiro-task` trailer | `git log --grep="kiro-task" --oneline \| Measure-Object` | **53** of 93, at `b6ece18` |
 | Steering, hooks, agents | `(Get-ChildItem .kiro\steering).Count; (Get-ChildItem .kiro\hooks).Count; (Get-ChildItem .kiro\agents -Filter *.json).Count` | 8 steering docs, 6 hooks, 5 custom agents |
 | MCP tools | `.kiro/settings/mcp.json` and `backend/necro/mcp_tools.py` | `necromancer` server with 5 tools (`exhume`, `autopsy`, `resurrect`, `prove`, `gate`), plus `fetch` |
 | CI jobs | `Select-String -Path .github\workflows\ci.yml -Pattern '^  [a-z-]+:$'` | 4 jobs: `repo-integrity`, `backend`, `frontend`, `e2e` |
@@ -106,12 +108,14 @@ Base URL: `https://7bs6otuwci.execute-api.ap-southeast-2.amazonaws.com`
 
 | What | Command | Result |
 |---|---|---|
-| Health and deployed build | `curl.exe -s https://7bs6otuwci.execute-api.ap-southeast-2.amazonaws.com/healthz` | `{"status":"ok","version":"0.1.0","commit":"509b3a62c0f5"}` |
+| Health and deployed build | `curl.exe -s https://7bs6otuwci.execute-api.ap-southeast-2.amazonaws.com/healthz` | `{"status":"ok","version":"0.1.0","commit":"068eb90f35cd"}` |
 | The UI is served | `(Invoke-WebRequest https://7bs6otuwci.execute-api.ap-southeast-2.amazonaws.com/ -UseBasicParsing).StatusCode` | 200, `text/html`, the page contains "NECROMANCER" |
-| Both verdicts, on the live API | the script below | `baseline=NO-GO tightened=GO examples=5000`, 13 s |
+| Both verdicts, on the live API | the script below | `baseline=NO-GO tightened=GO examples=5000`, 12 s |
 
-The deployed build is `509b3a6`. Commits after it (the accessibility pass, the e2e tests, the redaction fix) are in
-the repository and not yet deployed.
+The deployed build is `068eb90`. Checked with `git diff --quiet 068eb90 HEAD -- backend frontend template.yaml deploy.ps1 samples`
+(exit code 0): the application code is the same as at `b6ece18`, so the live demo runs the current code. The numbers
+in the sections above were measured at `7eb6f08`, and the same command shows no application change since then (exit
+code 0), so they still describe the code.
 
 ```powershell
 $u = "https://7bs6otuwci.execute-api.ap-southeast-2.amazonaws.com"
